@@ -82,7 +82,7 @@ function TrackerApp() {
   const [notes, setNotes] = useState('')
   const [samples, setSamples] = useState('')
   const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
-  const [assignedTo, setAssignedTo] = useState('tom')
+  const [assignedTo, setAssignedTo] = useState<'tom' | 'chris'>('tom')
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [measuredBy, setMeasuredBy] = useState('')
   const [measuredBooked, setMeasuredBooked] = useState('')
@@ -343,8 +343,8 @@ function TrackerApp() {
 
   // Counts for Stats
   const totalJobs = workItemsList.length
-  const pendingJobs = workItemsList.filter((i) => i.status === 'Pending').length
-  const progressJobs = workItemsList.filter((i) => i.status === 'In Progress').length
+  const measureBookedJobs = workItemsList.filter((i) => i.status === 'Measure booked').length
+  const progressJobs = workItemsList.filter((i) => i.status === 'In progress').length
   const completedJobs = workItemsList.filter((i) => i.status === 'Completed').length
 
   // Main Loader
@@ -431,10 +431,8 @@ function TrackerApp() {
                 >
                   {authSubmitting ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : authMode === 'login' ? (
-                    'Log In'
                   ) : (
-                    'Create Account'
+                    'Log In'
                   )}
                 </button>
               </div>
@@ -508,8 +506,8 @@ function TrackerApp() {
 
           <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Pending</p>
-              <p className="text-3xl font-extrabold text-white mt-1">{pendingJobs}</p>
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Measure Booked</p>
+              <p className="text-3xl font-extrabold text-white mt-1">{measureBookedJobs}</p>
             </div>
             <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/20">
               <Clock className="w-5 h-5" />
@@ -799,7 +797,7 @@ function TrackerApp() {
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Assigned To</label>
                   <select
                     value={assignedTo}
-                    onChange={(e) => setAssignedTo(e.target.value)}
+                    onChange={(e) => setAssignedTo(e.target.value as 'tom' | 'chris')}
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                   >
                     <option value="tom">Tom</option>
