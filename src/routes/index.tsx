@@ -42,6 +42,7 @@ interface WorkItem {
   whereNeedsMeasuring: string
   samples?: string | null
   carpetAndFlooringOrdered?: boolean
+    carpetOrderedDate?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -70,6 +71,7 @@ function TrackerApp() {
   const [notes, setNotes] = useState('')
   const [samples, setSamples] = useState('')
   const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
+  const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
 
@@ -182,6 +184,7 @@ function TrackerApp() {
     setNotes(item.notes || '')
     setSamples((item as any).samples || '')
     setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
+    setCarpetOrderedDate((item as any).carpetOrderedDate || '')
     setFormError(null)
     setFormMode('edit')
   }
@@ -664,16 +667,15 @@ function TrackerApp() {
                   />
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <input
-                    id="carpetOrdered"
-                    type="checkbox"
-                    checked={carpetAndFlooringOrdered}
-                    onChange={(e) => setCarpetAndFlooringOrdered(e.target.checked)}
-                    className="w-4 h-4 rounded"
-                  />
-                  <label htmlFor="carpetOrdered" className="text-sm font-semibold text-slate-300">Carpet / Flooring ordered</label>
-                </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet / Flooring ordered (date)</label>
+                    <input
+                      type="date"
+                      value={carpetOrderedDate}
+                      onChange={(e) => setCarpetOrderedDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                  </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
@@ -787,10 +789,10 @@ function TrackerApp() {
                         </div>
                       )}
 
-                      {item.carpetAndFlooringOrdered && (
+                      {item.carpetOrderedDate && (
                         <div>
                           <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet / Flooring</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">Ordered</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">Ordered: {new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
                         </div>
                       )}
                     </div>

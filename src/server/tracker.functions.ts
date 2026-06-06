@@ -208,6 +208,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     carpetAndFlooringOrdered: z.boolean().optional(),
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
+    carpetOrderedDate: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -228,6 +229,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         carpetAndFlooringOrdered: data.carpetAndFlooringOrdered || false,
         measuredBooked: data.measuredBooked || "",
         fittingDate: data.fittingDate || "",
+        carpetOrderedDate: data.carpetOrderedDate || "",
       })
       .returning();
       
@@ -247,6 +249,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     carpetAndFlooringOrdered: z.boolean().optional(),
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
+    carpetOrderedDate: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -264,6 +267,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
         samples: (values as any).samples || "",
         measuredBooked: values.measuredBooked || "",
         fittingDate: values.fittingDate || "",
+        carpetOrderedDate: (values as any).carpetOrderedDate || "",
         updatedAt: new Date(),
       })
       .where(eq(workItems.id, id))

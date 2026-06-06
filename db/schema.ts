@@ -20,6 +20,7 @@ export const workItems = pgTable("work_items", {
   carpetAndFlooringOrdered: boolean("carpet_and_flooring_ordered").notNull().default(false),
   measuredBooked: text("measured_booked"),
   fittingDate: text("fitting_date"),
+  carpetOrderedDate: text("carpet_ordered_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
