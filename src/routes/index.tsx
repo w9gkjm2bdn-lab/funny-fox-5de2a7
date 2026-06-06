@@ -20,12 +20,12 @@ import {
 import {
   login,
   logout,
-  register,
   getCurrentUser,
   getWorkItems,
   createWorkItem,
   updateWorkItem,
   deleteWorkItem,
+  updateUserProfile,
 } from '../server/tracker.functions'
 
 export const Route = createFileRoute('/')({
@@ -42,40 +42,60 @@ interface WorkItem {
   whereNeedsMeasuring: string
   samples?: string | null
   carpetAndFlooringOrdered?: boolean
-    carpetOrderedDate?: string | null
-    measuredBy?: string | null
+  carpetOrderedDate?: string | null
+  measuredBy?: string | null
+  measuredBooked?: string | null
+  fittingDate?: string | null
+  assignedTo?: string | null
   createdAt: string
   updatedAt: string
 }
 
+interface CurrentUser {
+  userId: number
+  username: string
+  isAdmin?: boolean
+  displayName?: string
+  imageUrl?: string
+}
+
 function TrackerApp() {
-  const [user, setUser] = useState<{ userId: number; username: string; isAdmin?: boolean } | null>(null)
+  const [user, setUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [itemsLoading, setItemsLoading] = useState(false)
   const [workItemsList, setWorkItemsList] = useState<WorkItem[]>([])
   
   // Auth Form State
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [usernameInput, setUsernameInput] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [authError, setAuthError] = useState<string | null>(null)
-  const [authSubmitting, setAuthErrorSubmitting] = useState(false)
+  const [authSubmitting, setAuthSubmitting] = useState(false)
 
   // Work Item Form State (for both Add and Edit)
   const [formMode, setFormMode] = useState<'none' | 'add' | 'edit'>('none')
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
   const [customerName, setCustomerName] = useState('')
   const [site, setSite] = useState('')
-  const [status, setStatus] = useState('Pending')
+  const [status, setStatus] = useState('Measure booked')
   const [whatsRequired, setWhatsRequired] = useState('')
   const [whereNeedsMeasuring, setWhereNeedsMeasuring] = useState('')
   const [notes, setNotes] = useState('')
   const [samples, setSamples] = useState('')
   const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
+  const [assignedTo, setAssignedTo] = useState('tom')
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [measuredBy, setMeasuredBy] = useState('')
+  const [measuredBooked, setMeasuredBooked] = useState('')
+  const [fittingDate, setFittingDate] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [profileDisplayName, setProfileDisplayName] = useState('')
+  const [profileImageUrl, setProfileImageUrl] = useState('')
+  const [profilePassword, setProfilePassword] = useState('')
+  const [profileConfirmPassword, setProfileConfirmPassword] = useState('')
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileSubmitting, setProfileSubmitting] = useState(false)
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
@@ -127,26 +147,19 @@ function TrackerApp() {
       return
     }
 
-    setAuthErrorSubmitting(true)
+    setAuthSubmitting(true)
     try {
-      if (authMode === 'login') {
-        const loggedInUser = await login({
-          data: { username: usernameInput, password: passwordInput },
-        })
-        setUser(loggedInUser)
-      } else {
-        const registeredUser = await register({
-          data: { username: usernameInput, password: passwordInput },
-        })
-        setUser(registeredUser)
-      }
+      const loggedInUser = await login({
+        data: { username: usernameInput, password: passwordInput },
+      })
+      setUser(loggedInUser)
       setUsernameInput('')
       setPasswordInput('')
       await fetchWorkItems()
     } catch (err: any) {
       setAuthError(err?.message || 'Authentication failed. Please try again.')
     } finally {
-      setAuthErrorSubmitting(false)
+      setAuthSubmitting(false)
     }
   }
 
@@ -161,16 +174,61 @@ function TrackerApp() {
     }
   }
 
+  const openProfile = () => {
+    if (!user) return
+    setProfileDisplayName(user.displayName || user.username)
+    setProfileImageUrl(user.imageUrl || '')
+    setProfilePassword('')
+    setProfileConfirmPassword('')
+    setProfileError(null)
+    setProfileOpen(true)
+  }
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setProfileError(null)
+
+    if (profilePassword && profilePassword !== profileConfirmPassword) {
+      setProfileError('Passwords must match')
+      return
+    }
+
+    setProfileSubmitting(true)
+    try {
+      const updatedUser = await updateUserProfile({
+        data: {
+          displayName: profileDisplayName,
+          imageUrl: profileImageUrl,
+          password: profilePassword || undefined,
+          confirmPassword: profileConfirmPassword || undefined,
+        },
+      })
+      setUser(updatedUser)
+      setProfileOpen(false)
+      setProfilePassword('')
+      setProfileConfirmPassword('')
+    } catch (err: any) {
+      setProfileError(err?.message || 'Unable to save profile settings')
+    } finally {
+      setProfileSubmitting(false)
+    }
+  }
+
   // Open Form for Adding
   const openAddForm = () => {
     setCustomerName('')
     setSite('')
-    setStatus('Pending')
+    setStatus('Measure booked')
     setWhatsRequired('')
     setWhereNeedsMeasuring('')
     setNotes('')
     setSamples('')
     setCarpetAndFlooringOrdered(false)
+    setAssignedTo('tom')
+    setCarpetOrderedDate('')
+    setMeasuredBy('')
+    setMeasuredBooked('')
+    setFittingDate('')
     setFormError(null)
     setFormMode('add')
   }
@@ -186,8 +244,11 @@ function TrackerApp() {
     setNotes(item.notes || '')
     setSamples((item as any).samples || '')
     setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
+    setAssignedTo((item as any).assignedTo || 'tom')
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
     setMeasuredBy((item as any).measuredBy || '')
+    setMeasuredBooked((item as any).measuredBooked || '')
+    setFittingDate((item as any).fittingDate || '')
     setFormError(null)
     setFormMode('edit')
   }
@@ -210,12 +271,15 @@ function TrackerApp() {
             customerName,
             site,
             status,
+            assignedTo,
             whatsRequired,
             whereNeedsMeasuring,
             notes,
             samples,
             carpetAndFlooringOrdered,
             measuredBy,
+            measuredBooked,
+            fittingDate,
             carpetOrderedDate,
           },
         })
@@ -226,12 +290,15 @@ function TrackerApp() {
             customerName,
             site,
             status,
+            assignedTo,
             whatsRequired,
             whereNeedsMeasuring,
             notes,
             samples,
             carpetAndFlooringOrdered,
             measuredBy,
+            measuredBooked,
+            fittingDate,
             carpetOrderedDate,
           },
         })
@@ -310,35 +377,6 @@ function TrackerApp() {
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <div className="bg-slate-900/50 backdrop-blur-md py-8 px-4 shadow-xl ring-1 ring-slate-800 rounded-3xl sm:px-10 border border-slate-800">
-            <div className="flex bg-slate-950/80 p-1 rounded-xl mb-6 border border-slate-800">
-              <button
-                onClick={() => {
-                  setAuthMode('login')
-                  setAuthError(null)
-                }}
-                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                  authMode === 'login'
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/10'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => {
-                  setAuthMode('register')
-                  setAuthError(null)
-                }}
-                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                  authMode === 'register'
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/10'
-                    : 'text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                Register
-              </button>
-            </div>
-
             <form className="space-y-5" onSubmit={handleAuthSubmit}>
               <div>
                 <label className="block text-sm font-medium text-slate-300">
@@ -409,7 +447,7 @@ function TrackerApp() {
                   Team Login
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Enter your team credentials to access the tracker. If you do not have an account yet, register one here.
+                  Enter your team credentials to access the tracker. Accounts are managed centrally and cannot be created here.
                 </p>
               </div>
             </div>
@@ -436,10 +474,14 @@ function TrackerApp() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-sm">
+            <button
+              onClick={openProfile}
+              className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-sm text-left hover:bg-slate-900 transition-all"
+              title="Edit profile"
+            >
               <User className="w-4 h-4 text-emerald-400" />
-              <span className="text-slate-300 font-medium capitalize">{user.username}</span>
-            </div>
+              <span className="text-slate-300 font-medium capitalize">{user.displayName || user.username}</span>
+            </button>
             <button
               onClick={handleLogout}
               className="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all cursor-pointer"
@@ -520,8 +562,10 @@ function TrackerApp() {
                 className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10"
               >
                 <option value="All">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
+                <option value="Measure booked">Measure booked</option>
+                <option value="Fitting booked">Fitting booked</option>
+                <option value="Quote sent">Quote sent</option>
+                <option value="In progress">In progress</option>
                 <option value="Completed">Completed</option>
               </select>
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
@@ -538,6 +582,95 @@ function TrackerApp() {
             Add Work Item
           </button>
         </div>
+
+        {profileOpen && (
+          <div className="bg-slate-900 rounded-3xl border border-slate-800/80 overflow-hidden shadow-xl shadow-emerald-950/5 mt-6">
+            <div className="px-6 py-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-emerald-400" />
+                Edit Profile
+              </h3>
+              <button
+                onClick={() => setProfileOpen(false)}
+                className="text-slate-400 hover:text-slate-200 text-sm font-semibold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            <form onSubmit={handleProfileSubmit} className="p-6 space-y-6">
+              {profileError && (
+                <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 flex items-center gap-2 border border-red-500/25">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{profileError}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Display Name</label>
+                  <input
+                    type="text"
+                    value={profileDisplayName}
+                    onChange={(e) => setProfileDisplayName(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Tom, Chris, or your name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Profile Image URL</label>
+                  <input
+                    type="url"
+                    value={profileImageUrl}
+                    onChange={(e) => setProfileImageUrl(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">New Password</label>
+                  <input
+                    type="password"
+                    value={profilePassword}
+                    onChange={(e) => setProfilePassword(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Leave blank to keep current password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={profileConfirmPassword}
+                    onChange={(e) => setProfileConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(false)}
+                  className="px-5 py-2.5 bg-slate-950 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={profileSubmitting}
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/10"
+                >
+                  {profileSubmitting ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    'Save Profile'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Dynamic Modal / Inline Form for Add & Edit */}
         {formMode !== 'none' && (
@@ -601,8 +734,10 @@ function TrackerApp() {
                     onChange={(e) => setStatus(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm cursor-pointer"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="In Progress">In Progress</option>
+                    <option value="Measure booked">Measure booked</option>
+                    <option value="Fitting booked">Fitting booked</option>
+                    <option value="Quote sent">Quote sent</option>
+                    <option value="In progress">In progress</option>
                     <option value="Completed">Completed</option>
                   </select>
                 </div>
@@ -660,6 +795,48 @@ function TrackerApp() {
                     placeholder="Samples required or notes about samples"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Assigned To</label>
+                  <select
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  >
+                    <option value="tom">Tom</option>
+                    <option value="chris">Chris</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Flooring ordered</label>
+                  <input
+                    type="date"
+                    value={carpetOrderedDate}
+                    onChange={(e) => setCarpetOrderedDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Measure booked</label>
+                  <input
+                    type="date"
+                    value={measuredBooked}
+                    onChange={(e) => setMeasuredBooked(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Fitting date</label>
+                  <input
+                    type="date"
+                    value={fittingDate}
+                    onChange={(e) => setFittingDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Who's measuring</label>
                   <select
@@ -723,10 +900,16 @@ function TrackerApp() {
               let statusBadgeClass = ''
               if (item.status === 'Completed') {
                 statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              } else if (item.status === 'In Progress') {
+              } else if (item.status === 'In progress') {
                 statusBadgeClass = 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-              } else {
+              } else if (item.status === 'Measure booked') {
+                statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              } else if (item.status === 'Fitting booked') {
+                statusBadgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+              } else if (item.status === 'Quote sent') {
                 statusBadgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              } else {
+                statusBadgeClass = 'bg-slate-700/10 text-slate-300 border border-slate-700/20'
               }
 
               return (
@@ -745,6 +928,12 @@ function TrackerApp() {
                           <MapPin className="w-3.5 h-3.5 text-emerald-500/80" />
                           <span>{item.site}</span>
                         </div>
+                        {item.assignedTo && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+                            <Briefcase className="w-3.5 h-3.5 text-violet-400/80" />
+                            <span className="capitalize">Assigned to {item.assignedTo}</span>
+                          </div>
+                        )}
                       </div>
                       <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${statusBadgeClass}`}>
                         {item.status}
@@ -787,8 +976,20 @@ function TrackerApp() {
 
                       {item.carpetOrderedDate && (
                         <div>
-                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet / Flooring</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">Ordered: {new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
+                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Flooring ordered</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {item.measuredBooked && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Measure booked</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.measuredBooked).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {item.fittingDate && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Fitting date</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.fittingDate).toLocaleDateString()}</p>
                         </div>
                       )}
                     </div>

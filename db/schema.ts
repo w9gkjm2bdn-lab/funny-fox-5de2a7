@@ -4,6 +4,8 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name"),
+  imageUrl: text("image_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -18,6 +20,7 @@ export const workItems = pgTable("work_items", {
   whereNeedsMeasuring: text("where_needs_measuring").notNull(),
   samples: text("samples"),
   carpetAndFlooringOrdered: boolean("carpet_and_flooring_ordered").notNull().default(false),
+  assignedTo: text("assigned_to"),
   measuredBy: text("measured_by"),
   measuredBooked: text("measured_booked"),
   fittingDate: text("fitting_date"),

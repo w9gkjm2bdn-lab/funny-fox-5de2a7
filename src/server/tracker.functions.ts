@@ -61,8 +61,8 @@ async function ensureDefaultUsers() {
     const existingUsers = await db.select().from(users).limit(1);
     if (existingUsers.length === 0) {
       const defaultUsers = [
-        { username: "tom", passwordHash: hashPassword("Password123"), isAdmin: true },
-        { username: "chris", passwordHash: hashPassword("Password123"), isAdmin: true },
+        { username: "tom", passwordHash: hashPassword("Password123"), displayName: "Tom", imageUrl: "", isAdmin: true },
+        { username: "chris", passwordHash: hashPassword("Password123"), displayName: "Chris", imageUrl: "", isAdmin: true },
       ];
       await db.insert(users).values(defaultUsers);
     }
@@ -120,6 +120,8 @@ export const login = createServerFn({ method: "POST" })
       userId: user.id,
       username: user.username,
       isAdmin: user.isAdmin,
+      displayName: user.displayName || user.username,
+      imageUrl: user.imageUrl || "",
     };
   });
 
@@ -133,7 +135,68 @@ export const getCurrentUser = createServerFn({ method: "GET" })
   .handler(async () => {
     await ensureDefaultUsers();
     const sessionUser = await getAuthenticatedUser();
-    return sessionUser;
+    if (!sessionUser) return null;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, sessionUser.userId))
+      .limit(1);
+
+    if (!user) return null;
+
+    return {
+      userId: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin,
+      displayName: user.displayName || user.username,
+      imageUrl: user.imageUrl || "",
+    };
+  });
+
+export const updateUserProfile = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    displayName: z.string().optional(),
+    imageUrl: z.string().url().optional(),
+    password: z.string().min(6).optional(),
+    confirmPassword: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    if (data.password && data.password !== data.confirmPassword) {
+      throw new Error("Passwords do not match");
+    }
+
+    const updates: Record<string, any> = {
+      displayName: data.displayName || undefined,
+      imageUrl: data.imageUrl || undefined,
+    };
+
+    if (data.password) {
+      updates.passwordHash = hashPassword(data.password);
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, user.userId))
+      .returning();
+
+    if (!updatedUser) {
+      throw new Error("User not found");
+    }
+
+    return {
+      userId: updatedUser.id,
+      username: updatedUser.username,
+      isAdmin: updatedUser.isAdmin,
+      displayName: updatedUser.displayName || updatedUser.username,
+      imageUrl: updatedUser.imageUrl || "",
+    };
   });
 
 export const register = createServerFn({ method: "POST" })
@@ -141,46 +204,8 @@ export const register = createServerFn({ method: "POST" })
     username: z.string().min(3, "Username must be at least 3 characters").max(20),
     password: z.string().min(6, "Password must be at least 6 characters"),
   }))
-  .handler(async ({ data }) => {
-    await ensureDefaultUsers();
-    
-    const normalizedUsername = data.username.trim().toLowerCase();
-    
-    const [existing] = await db
-      .select()
-      .from(users)
-      .where(eq(users.username, normalizedUsername))
-      .limit(1);
-      
-    if (existing) {
-      throw new Error("Username is already taken");
-    }
-    
-    const passwordHash = hashPassword(data.password);
-    
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        username: normalizedUsername,
-        passwordHash,
-        isAdmin: false,
-      })
-      .returning();
-      
-    const token = encryptSession(newUser.id, newUser.username, false);
-    
-    setCookie("work_tracker_session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
-    });
-    
-    return {
-      userId: newUser.id,
-      username: newUser.username,
-      isAdmin: newUser.isAdmin,
-    };
+  .handler(async () => {
+    throw new Error("Registration is disabled. Please contact an administrator to create an account.");
   });
 
 export const getWorkItems = createServerFn({ method: "GET" })
@@ -225,6 +250,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         status: data.status,
         notes: data.notes || "",
         samples: data.samples || "",
+        assignedTo: data.assignedTo,
         measuredBy: (data as any).measuredBy || "",
         whatsRequired: data.whatsRequired,
         whereNeedsMeasuring: data.whereNeedsMeasuring,
@@ -248,7 +274,9 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     samples: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    assignedTo: z.enum(['tom', 'chris']),
     carpetAndFlooringOrdered: z.boolean().optional(),
+    measuredBy: z.string().optional(),
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
