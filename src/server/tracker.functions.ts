@@ -66,6 +66,13 @@ async function ensureDefaultUsers() {
       ];
       await db.insert(users).values(defaultUsers);
     }
+    // Ensure known team accounts have admin privileges (idempotent)
+    try {
+      await db.update(users).set({ isAdmin: true }).where(eq(users.username, 'chris'))
+      await db.update(users).set({ isAdmin: true }).where(eq(users.username, 'tom'))
+    } catch (e) {
+      // ignore if migration/state doesn't include column yet
+    }
   } catch (err) {
     console.error("Error during default user seeding:", err);
   }
@@ -195,6 +202,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     site: z.string().min(1, "Site is required"),
     status: z.string().min(1, "Status is required"),
     notes: z.string().optional(),
+    samples: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
     carpetAndFlooringOrdered: z.boolean().optional(),
@@ -214,6 +222,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         site: data.site,
         status: data.status,
         notes: data.notes || "",
+        samples: data.samples || "",
         whatsRequired: data.whatsRequired,
         whereNeedsMeasuring: data.whereNeedsMeasuring,
         carpetAndFlooringOrdered: data.carpetAndFlooringOrdered || false,
@@ -232,6 +241,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     site: z.string().min(1, "Site is required"),
     status: z.string().min(1, "Status is required"),
     notes: z.string().optional(),
+    samples: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
     carpetAndFlooringOrdered: z.boolean().optional(),
@@ -251,6 +261,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
       .set({
         ...values,
         notes: values.notes || "",
+        samples: (values as any).samples || "",
         measuredBooked: values.measuredBooked || "",
         fittingDate: values.fittingDate || "",
         updatedAt: new Date(),

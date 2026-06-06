@@ -40,12 +40,14 @@ interface WorkItem {
   notes: string | null
   whatsRequired: string
   whereNeedsMeasuring: string
+  samples?: string | null
+  carpetAndFlooringOrdered?: boolean
   createdAt: string
   updatedAt: string
 }
 
 function TrackerApp() {
-  const [user, setUser] = useState<{ userId: number; username: string } | null>(null)
+  const [user, setUser] = useState<{ userId: number; username: string; isAdmin?: boolean } | null>(null)
   const [loading, setLoading] = useState(true)
   const [itemsLoading, setItemsLoading] = useState(false)
   const [workItemsList, setWorkItemsList] = useState<WorkItem[]>([])
@@ -66,6 +68,8 @@ function TrackerApp() {
   const [whatsRequired, setWhatsRequired] = useState('')
   const [whereNeedsMeasuring, setWhereNeedsMeasuring] = useState('')
   const [notes, setNotes] = useState('')
+  const [samples, setSamples] = useState('')
+  const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
 
@@ -161,6 +165,8 @@ function TrackerApp() {
     setWhatsRequired('')
     setWhereNeedsMeasuring('')
     setNotes('')
+    setSamples('')
+    setCarpetAndFlooringOrdered(false)
     setFormError(null)
     setFormMode('add')
   }
@@ -174,6 +180,8 @@ function TrackerApp() {
     setWhatsRequired(item.whatsRequired)
     setWhereNeedsMeasuring(item.whereNeedsMeasuring)
     setNotes(item.notes || '')
+    setSamples((item as any).samples || '')
+    setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
     setFormError(null)
     setFormMode('edit')
   }
@@ -199,6 +207,8 @@ function TrackerApp() {
             whatsRequired,
             whereNeedsMeasuring,
             notes,
+            samples,
+            carpetAndFlooringOrdered,
           },
         })
       } else if (formMode === 'edit' && selectedItemId !== null) {
@@ -211,6 +221,8 @@ function TrackerApp() {
             whatsRequired,
             whereNeedsMeasuring,
             notes,
+            samples,
+            carpetAndFlooringOrdered,
           },
         })
       }
@@ -392,15 +404,15 @@ function TrackerApp() {
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div className="bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80 text-center">
                     <p className="text-xs font-semibold text-slate-300">Username 1</p>
-                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">admin</p>
+                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">tom</p>
                   </div>
                   <div className="bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80 text-center">
                     <p className="text-xs font-semibold text-slate-300">Username 2</p>
-                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">user</p>
+                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">chris</p>
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 text-center mt-3 font-mono">
-                  Password: tracker123
+                  Password: Password123
                 </p>
               </div>
             </div>
@@ -640,6 +652,30 @@ function TrackerApp() {
                 />
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Samples (Optional)</label>
+                  <input
+                    type="text"
+                    value={samples}
+                    onChange={(e) => setSamples(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Samples required or notes about samples"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="carpetOrdered"
+                    type="checkbox"
+                    checked={carpetAndFlooringOrdered}
+                    onChange={(e) => setCarpetAndFlooringOrdered(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                  />
+                  <label htmlFor="carpetOrdered" className="text-sm font-semibold text-slate-300">Carpet / Flooring ordered</label>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
@@ -739,6 +775,22 @@ function TrackerApp() {
                           <p className="text-xs text-slate-400 leading-relaxed italic mt-0.5 whitespace-pre-line">
                             {item.notes}
                           </p>
+                        </div>
+                      )}
+
+                      {(item as any).samples && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">Samples</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
+                            {(item as any).samples}
+                          </p>
+                        </div>
+                      )}
+
+                      {item.carpetAndFlooringOrdered && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet / Flooring</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">Ordered</p>
                         </div>
                       )}
                     </div>
