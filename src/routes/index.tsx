@@ -406,23 +406,10 @@ function TrackerApp() {
               <div className="rounded-2xl bg-emerald-950/20 border border-emerald-900/30 p-4">
                 <h4 className="text-sm font-bold text-emerald-400 mb-1 flex items-center gap-1.5">
                   <span className="flex h-2 w-2 rounded-full bg-emerald-400"></span>
-                  Default Logins Pre-configured
+                  Team Login
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  To log in as one of the two pre-seeded team users, enter either username with password:
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80 text-center">
-                    <p className="text-xs font-semibold text-slate-300">Username 1</p>
-                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">tom</p>
-                  </div>
-                  <div className="bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80 text-center">
-                    <p className="text-xs font-semibold text-slate-300">Username 2</p>
-                    <p className="text-[11px] font-mono text-emerald-400 mt-0.5">chris</p>
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-500 text-center mt-3 font-mono">
-                  Password: Password123
+                  Enter your team credentials to access the tracker. If you do not have an account yet, register one here.
                 </p>
               </div>
             </div>
