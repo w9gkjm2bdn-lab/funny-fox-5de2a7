@@ -43,6 +43,7 @@ interface WorkItem {
   samples?: string | null
   carpetAndFlooringOrdered?: boolean
     carpetOrderedDate?: string | null
+    measuredBy?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -72,6 +73,7 @@ function TrackerApp() {
   const [samples, setSamples] = useState('')
   const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
+  const [measuredBy, setMeasuredBy] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
 
@@ -185,6 +187,7 @@ function TrackerApp() {
     setSamples((item as any).samples || '')
     setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
+    setMeasuredBy((item as any).measuredBy || '')
     setFormError(null)
     setFormMode('edit')
   }
@@ -212,6 +215,8 @@ function TrackerApp() {
             notes,
             samples,
             carpetAndFlooringOrdered,
+            measuredBy,
+            carpetOrderedDate,
           },
         })
       } else if (formMode === 'edit' && selectedItemId !== null) {
@@ -226,6 +231,8 @@ function TrackerApp() {
             notes,
             samples,
             carpetAndFlooringOrdered,
+            measuredBy,
+            carpetOrderedDate,
           },
         })
       }
@@ -630,7 +637,7 @@ function TrackerApp() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-300 mb-1.5">
-                  What’s Required <span className="text-red-500">*</span>
+                  What flooring is required <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={whatsRequired}
@@ -666,16 +673,18 @@ function TrackerApp() {
                     placeholder="Samples required or notes about samples"
                   />
                 </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet / Flooring ordered (date)</label>
-                    <input
-                      type="date"
-                      value={carpetOrderedDate}
-                      onChange={(e) => setCarpetOrderedDate(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Who's measuring</label>
+                  <select
+                    value={measuredBy}
+                    onChange={(e) => setMeasuredBy(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  >
+                    <option value="">-- Select --</option>
+                    <option value="tom">Tom</option>
+                    <option value="chris">Chris</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
