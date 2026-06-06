@@ -197,6 +197,9 @@ export const createWorkItem = createServerFn({ method: "POST" })
     notes: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    carpetAndFlooringOrdered: z.boolean().optional(),
+    measuredBooked: z.string().optional(),
+    fittingDate: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -213,6 +216,9 @@ export const createWorkItem = createServerFn({ method: "POST" })
         notes: data.notes || "",
         whatsRequired: data.whatsRequired,
         whereNeedsMeasuring: data.whereNeedsMeasuring,
+        carpetAndFlooringOrdered: data.carpetAndFlooringOrdered || false,
+        measuredBooked: data.measuredBooked || "",
+        fittingDate: data.fittingDate || "",
       })
       .returning();
       
@@ -228,6 +234,9 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     notes: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    carpetAndFlooringOrdered: z.boolean().optional(),
+    measuredBooked: z.string().optional(),
+    fittingDate: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -242,6 +251,8 @@ export const updateWorkItem = createServerFn({ method: "POST" })
       .set({
         ...values,
         notes: values.notes || "",
+        measuredBooked: values.measuredBooked || "",
+        fittingDate: values.fittingDate || "",
         updatedAt: new Date(),
       })
       .where(eq(workItems.id, id))
