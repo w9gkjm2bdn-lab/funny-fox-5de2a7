@@ -205,6 +205,8 @@ export const register = createServerFn({ method: "POST" })
     password: z.string().min(6, "Password must be at least 6 characters"),
   }))
   .handler(async () => {
+    // Registration is disabled by design. Accounts are created directly in the
+    // database by an administrator; there is no self-service sign-up.
     throw new Error("Registration is disabled. Please contact an administrator to create an account.");
   });
 
@@ -230,6 +232,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     samples: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    assignedTo: z.enum(['tom', 'chris']),
     measuredBy: z.string().optional(),
     carpetAndFlooringOrdered: z.boolean().optional(),
     measuredBooked: z.string().optional(),
