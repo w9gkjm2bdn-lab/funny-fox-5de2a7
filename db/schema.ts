@@ -18,6 +18,7 @@ export const workItems = pgTable("work_items", {
   whereNeedsMeasuring: text("where_needs_measuring").notNull(),
   samples: text("samples"),
   carpetAndFlooringOrdered: boolean("carpet_and_flooring_ordered").notNull().default(false),
+  measuredBy: text("measured_by"),
   measuredBooked: text("measured_booked"),
   fittingDate: text("fitting_date"),
   carpetOrderedDate: text("carpet_ordered_date"),
