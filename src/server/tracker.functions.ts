@@ -27,17 +27,17 @@ function verifyPassword(password: string, stored: string): boolean {
 const SECRET_KEY = process.env.SESSION_SECRET || "work-tracker-secure-fallback-secret-key-32b";
 const key = Buffer.from(SECRET_KEY.padEnd(32).slice(0, 32));
 
-function encryptSession(userId: number, username: string): string {
+function encryptSession(userId: number, username: string, isAdmin: boolean = false): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const data = JSON.stringify({ userId, username, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  const data = JSON.stringify({ userId, username, isAdmin, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 });
   let encrypted = cipher.update(data, "utf8", "hex");
   encrypted += cipher.final("hex");
   const tag = cipher.getAuthTag().toString("hex");
   return `${iv.toString("hex")}:${encrypted}:${tag}`;
 }
 
-function decryptSession(token: string): { userId: number; username: string } | null {
+function decryptSession(token: string): { userId: number; username: string; isAdmin: boolean } | null {
   try {
     const [ivHex, encrypted, tagHex] = token.split(":");
     if (!ivHex || !encrypted || !tagHex) return null;
@@ -61,8 +61,8 @@ async function ensureDefaultUsers() {
     const existingUsers = await db.select().from(users).limit(1);
     if (existingUsers.length === 0) {
       const defaultUsers = [
-        { username: "admin", passwordHash: hashPassword("tracker123") },
-        { username: "user", passwordHash: hashPassword("tracker123") },
+        { username: "tom", passwordHash: hashPassword("Password123"), isAdmin: true },
+        { username: "chris", passwordHash: hashPassword("Password123"), isAdmin: true },
       ];
       await db.insert(users).values(defaultUsers);
     }
@@ -100,7 +100,7 @@ export const login = createServerFn({ method: "POST" })
       throw new Error("Invalid username or password");
     }
     
-    const token = encryptSession(user.id, user.username);
+    const token = encryptSession(user.id, user.username, user.isAdmin);
     
     setCookie("work_tracker_session", token, {
       httpOnly: true,
@@ -112,6 +112,7 @@ export const login = createServerFn({ method: "POST" })
     return {
       userId: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
     };
   });
 
@@ -155,10 +156,11 @@ export const register = createServerFn({ method: "POST" })
       .values({
         username: normalizedUsername,
         passwordHash,
+        isAdmin: false,
       })
       .returning();
       
-    const token = encryptSession(newUser.id, newUser.username);
+    const token = encryptSession(newUser.id, newUser.username, false);
     
     setCookie("work_tracker_session", token, {
       httpOnly: true,
@@ -170,6 +172,7 @@ export const register = createServerFn({ method: "POST" })
     return {
       userId: newUser.id,
       username: newUser.username,
+      isAdmin: newUser.isAdmin,
     };
   });
 
