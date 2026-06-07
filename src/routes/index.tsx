@@ -809,7 +809,7 @@ function TrackerApp() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Flooring ordered</label>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet ordered</label>
                   <input
                     type="date"
                     value={carpetOrderedDate}
@@ -978,7 +978,7 @@ function TrackerApp() {
 
                       {item.carpetOrderedDate && (
                         <div>
-                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Flooring ordered</p>
+                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet ordered</p>
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
                         </div>
                       )}
