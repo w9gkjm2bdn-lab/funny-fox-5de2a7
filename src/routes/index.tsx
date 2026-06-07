@@ -560,6 +560,7 @@ function TrackerApp() {
                 className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10"
               >
                 <option value="All">All Statuses</option>
+                <option value="Pending">Pending</option>
                 <option value="Measure booked">Measure booked</option>
                 <option value="Fitting booked">Fitting booked</option>
                 <option value="Quote sent">Quote sent</option>
@@ -732,6 +733,7 @@ function TrackerApp() {
                     onChange={(e) => setStatus(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm cursor-pointer"
                   >
+                    <option value="Pending">Pending</option>
                     <option value="Measure booked">Measure booked</option>
                     <option value="Fitting booked">Fitting booked</option>
                     <option value="Quote sent">Quote sent</option>
@@ -906,6 +908,8 @@ function TrackerApp() {
                 statusBadgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
               } else if (item.status === 'Quote sent') {
                 statusBadgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              } else if (item.status === 'Pending') {
+                statusBadgeClass = 'bg-slate-500/10 text-slate-300 border border-slate-500/20'
               } else {
                 statusBadgeClass = 'bg-slate-700/10 text-slate-300 border border-slate-700/20'
               }
