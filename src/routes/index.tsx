@@ -16,6 +16,7 @@ import {
   Key,
   Database,
   Filter,
+  Archive,
 } from 'lucide-react'
 import {
   login,
@@ -100,6 +101,9 @@ function TrackerApp() {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
+
+  // Active vs Archive view ("Completed" jobs are archived out of the main list)
+  const [view, setView] = useState<'active' | 'archive'>('active')
 
   // Check auth on mount
   useEffect(() => {
@@ -327,8 +331,12 @@ function TrackerApp() {
     }
   }
 
+  // Completed jobs are archived: they leave the main list and live in the Archive view.
+  const activeItems = workItemsList.filter((item) => item.status !== 'Completed')
+  const archivedItems = workItemsList.filter((item) => item.status === 'Completed')
+
   // Filtering Logic
-  const filteredItems = workItemsList.filter((item) => {
+  const filteredItems = (view === 'archive' ? archivedItems : activeItems).filter((item) => {
     const matchesSearch =
       item.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.site.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -336,16 +344,18 @@ function TrackerApp() {
       item.whereNeedsMeasuring.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
 
-    const matchesStatus = statusFilter === 'All' || item.status === statusFilter
+    // Status filter only applies to the active list (the archive is all "Completed").
+    const matchesStatus =
+      view === 'archive' || statusFilter === 'All' || item.status === statusFilter
 
     return matchesSearch && matchesStatus
   })
 
   // Counts for Stats
-  const totalJobs = workItemsList.length
+  const totalJobs = activeItems.length
   const measureBookedJobs = workItemsList.filter((i) => i.status === 'Measure booked').length
   const progressJobs = workItemsList.filter((i) => i.status === 'In progress').length
-  const completedJobs = workItemsList.filter((i) => i.status === 'Completed').length
+  const completedJobs = archivedItems.length
 
   // Main Loader
   if (loading) {
@@ -496,7 +506,7 @@ function TrackerApp() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Jobs</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Jobs</p>
               <p className="text-3xl font-extrabold text-white mt-1">{totalJobs}</p>
             </div>
             <div className="p-3 bg-slate-800/80 rounded-xl text-slate-300 border border-slate-700/50">
@@ -524,15 +534,20 @@ function TrackerApp() {
             </div>
           </div>
 
-          <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setView('archive')}
+            className="text-left bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between hover:border-emerald-500/40 hover:bg-slate-900/70 transition-all cursor-pointer"
+            title="View archived (completed) jobs"
+          >
             <div>
-              <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Completed</p>
+              <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Archived</p>
               <p className="text-3xl font-extrabold text-white mt-1">{completedJobs}</p>
             </div>
             <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
               <CheckCircle2 className="w-5 h-5" />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Search, Filters and Create Action Block */}
@@ -557,7 +572,8 @@ function TrackerApp() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10"
+                disabled={view === 'archive'}
+                className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="All">All Statuses</option>
                 <option value="Pending">Pending</option>
@@ -565,7 +581,6 @@ function TrackerApp() {
                 <option value="Fitting booked">Fitting booked</option>
                 <option value="Quote sent">Quote sent</option>
                 <option value="In progress">In progress</option>
-                <option value="Completed">Completed</option>
               </select>
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
                 <Filter className="w-4 h-4" />
@@ -877,6 +892,40 @@ function TrackerApp() {
           </div>
         )}
 
+        {/* Active / Archive Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-800">
+          <button
+            type="button"
+            onClick={() => setView('active')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
+              view === 'active'
+                ? 'border-emerald-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Briefcase className="w-4 h-4" />
+            Active Jobs
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300">
+              {activeItems.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('archive')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
+              view === 'archive'
+                ? 'border-emerald-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Archive className="w-4 h-4" />
+            Archive
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300">
+              {archivedItems.length}
+            </span>
+          </button>
+        </div>
+
         {/* Work Items Listing Grid / View */}
         {itemsLoading && workItemsList.length === 0 ? (
           <div className="py-16 text-center">
@@ -886,11 +935,17 @@ function TrackerApp() {
         ) : filteredItems.length === 0 ? (
           <div className="bg-slate-900/20 py-20 text-center rounded-3xl border border-dashed border-slate-800">
             <Clipboard className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-slate-300">No Work Items Found</h3>
+            <h3 className="text-lg font-bold text-slate-300">
+              {view === 'archive' ? 'No Archived Jobs Yet' : 'No Work Items Found'}
+            </h3>
             <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-              {searchQuery || statusFilter !== 'All'
-                ? 'No items match your active search filter settings.'
-                : "Get started by adding your team's first work tracking entry!"}
+              {view === 'archive'
+                ? searchQuery
+                  ? 'No archived jobs match your active search.'
+                  : 'Jobs marked as “Completed” are moved here automatically so your active list stays clear.'
+                : searchQuery || statusFilter !== 'All'
+                  ? 'No items match your active search filter settings.'
+                  : "Get started by adding your team's first work tracking entry!"}
             </p>
           </div>
         ) : (
