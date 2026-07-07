@@ -44,6 +44,7 @@ interface WorkItem {
   samples?: string | null
   carpetAndFlooringOrdered?: boolean
   carpetOrderedDate?: string | null
+  carpetCostPerSqm?: string | null
   measuredBy?: string | null
   measuredBooked?: string | null
   fittingDate?: string | null
@@ -85,9 +86,10 @@ function TrackerApp() {
   const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
   const [assignedTo, setAssignedTo] = useState<'tom' | 'chris'>('tom')
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
+  const [carpetCostPerSqm, setCarpetCostPerSqm] = useState('')
   const [measuredBy, setMeasuredBy] = useState('')
   const [measuredBooked, setMeasuredBooked] = useState('')
-  const [fittingDate, setFittingDate] = useState('')
+  const [fittingDates, setFittingDates] = useState<string[]>([''])
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -230,9 +232,10 @@ function TrackerApp() {
     setCarpetAndFlooringOrdered(false)
     setAssignedTo('tom')
     setCarpetOrderedDate('')
+    setCarpetCostPerSqm('')
     setMeasuredBy('')
     setMeasuredBooked('')
-    setFittingDate('')
+    setFittingDates([''])
     setFormError(null)
     setFormMode('add')
   }
@@ -250,9 +253,14 @@ function TrackerApp() {
     setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
     setAssignedTo((item as any).assignedTo || 'tom')
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
+    setCarpetCostPerSqm((item as any).carpetCostPerSqm || '')
     setMeasuredBy((item as any).measuredBy || '')
     setMeasuredBooked((item as any).measuredBooked || '')
-    setFittingDate((item as any).fittingDate || '')
+    const loadedFittingDates = ((item as any).fittingDate || '')
+      .split(',')
+      .map((d: string) => d.trim())
+      .filter(Boolean)
+    setFittingDates(loadedFittingDates.length ? loadedFittingDates : [''])
     setFormError(null)
     setFormMode('edit')
   }
@@ -266,6 +274,9 @@ function TrackerApp() {
       setFormError('Please fill in all required fields')
       return
     }
+
+    // Multiple fitting dates are stored as a single comma-separated string.
+    const fittingDate = fittingDates.map((d) => d.trim()).filter(Boolean).join(',')
 
     setFormSubmitting(true)
     try {
@@ -285,6 +296,7 @@ function TrackerApp() {
             measuredBooked,
             fittingDate,
             carpetOrderedDate,
+            carpetCostPerSqm,
           },
         })
       } else if (formMode === 'edit' && selectedItemId !== null) {
@@ -304,6 +316,7 @@ function TrackerApp() {
             measuredBooked,
             fittingDate,
             carpetOrderedDate,
+            carpetCostPerSqm,
           },
         })
       }
@@ -329,6 +342,20 @@ function TrackerApp() {
       console.error('Delete error:', err)
       alert('Failed to delete work item')
     }
+  }
+
+  // Multi-day fitting date helpers (jobs can span several days)
+  const updateFittingDate = (index: number, value: string) => {
+    setFittingDates((prev) => prev.map((d, i) => (i === index ? value : d)))
+  }
+  const addFittingDate = () => {
+    setFittingDates((prev) => [...prev, ''])
+  }
+  const removeFittingDate = (index: number) => {
+    setFittingDates((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      return next.length ? next : ['']
+    })
   }
 
   // Completed jobs are archived: they leave the main list and live in the Archive view.
@@ -833,6 +860,24 @@ function TrackerApp() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet cost per m² (excl. VAT)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 text-sm">
+                      £
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={carpetCostPerSqm}
+                      onChange={(e) => setCarpetCostPerSqm(e.target.value)}
+                      className="w-full pl-8 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Measure booked</label>
                   <input
                     type="date"
@@ -841,15 +886,41 @@ function TrackerApp() {
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Fitting date</label>
-                  <input
-                    type="date"
-                    value={fittingDate}
-                    onChange={(e) => setFittingDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                  />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                  Fitting date(s)
+                </label>
+                <p className="text-xs text-slate-500 mb-2">Add more than one date for jobs that span multiple days.</p>
+                <div className="space-y-2.5">
+                  {fittingDates.map((date, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => updateFittingDate(index, e.target.value)}
+                        className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeFittingDate(index)}
+                        disabled={fittingDates.length === 1 && !date}
+                        className="p-2.5 text-slate-400 hover:text-red-400 rounded-xl hover:bg-red-500/10 border border-slate-800 hover:border-red-500/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Remove this date"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={addFittingDate}
+                  className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/20 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add another date
+                </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -1037,6 +1108,12 @@ function TrackerApp() {
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
                         </div>
                       )}
+                      {item.carpetCostPerSqm && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Carpet cost per m² (excl. VAT)</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">£{item.carpetCostPerSqm}</p>
+                        </div>
+                      )}
                       {item.measuredBooked && (
                         <div>
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Measure booked</p>
@@ -1045,8 +1122,23 @@ function TrackerApp() {
                       )}
                       {item.fittingDate && (
                         <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Fitting date</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.fittingDate).toLocaleDateString()}</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                            Fitting date{item.fittingDate.includes(',') ? 's' : ''}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {item.fittingDate
+                              .split(',')
+                              .map((d) => d.trim())
+                              .filter(Boolean)
+                              .map((d, i) => (
+                                <span
+                                  key={i}
+                                  className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/60 border border-slate-700/50 rounded-lg px-2 py-0.5"
+                                >
+                                  {new Date(d).toLocaleDateString()}
+                                </span>
+                              ))}
+                          </div>
                         </div>
                       )}
                     </div>
