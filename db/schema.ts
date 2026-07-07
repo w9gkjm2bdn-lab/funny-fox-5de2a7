@@ -25,6 +25,7 @@ export const workItems = pgTable("work_items", {
   measuredBooked: text("measured_booked"),
   fittingDate: text("fitting_date"),
   carpetOrderedDate: text("carpet_ordered_date"),
+  carpetCostPerSqm: text("carpet_cost_per_sqm"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -238,13 +238,14 @@ export const createWorkItem = createServerFn({ method: "POST" })
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
+    carpetCostPerSqm: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
     if (!user) {
       throw new Error("Unauthorized");
     }
-    
+
     const [newItem] = await db
       .insert(workItems)
       .values({
@@ -261,6 +262,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         measuredBooked: data.measuredBooked || "",
         fittingDate: data.fittingDate || "",
         carpetOrderedDate: data.carpetOrderedDate || "",
+        carpetCostPerSqm: data.carpetCostPerSqm || "",
       })
       .returning();
       
@@ -283,15 +285,16 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
+    carpetCostPerSqm: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
     if (!user) {
       throw new Error("Unauthorized");
     }
-    
+
     const { id, ...values } = data;
-    
+
     const [updatedItem] = await db
       .update(workItems)
       .set({
@@ -302,6 +305,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
         measuredBooked: values.measuredBooked || "",
         fittingDate: values.fittingDate || "",
         carpetOrderedDate: (values as any).carpetOrderedDate || "",
+        carpetCostPerSqm: (values as any).carpetCostPerSqm || "",
         updatedAt: new Date(),
       })
       .where(eq(workItems.id, id))
