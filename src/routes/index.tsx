@@ -91,6 +91,7 @@ function TrackerApp() {
   const [notes, setNotes] = useState('')
   const [samples, setSamples] = useState('')
   const [googleDriveUrl, setGoogleDriveUrl] = useState('')
+  const [editingDriveUrl, setEditingDriveUrl] = useState(false)
   const [upliftAndDisposal, setUpliftAndDisposal] = useState(false)
   const [furniture, setFurniture] = useState(false)
   const [assignedTo, setAssignedTo] = useState<'tom' | 'chris'>('tom')
@@ -260,6 +261,7 @@ function TrackerApp() {
     setNotes('')
     setSamples('')
     setGoogleDriveUrl('')
+    setEditingDriveUrl(false)
     setUpliftAndDisposal(false)
     setFurniture(false)
     setAssignedTo('tom')
@@ -284,6 +286,7 @@ function TrackerApp() {
     setNotes(item.notes || '')
     setSamples((item as any).samples || '')
     setGoogleDriveUrl(item.googleDriveUrl || '')
+    setEditingDriveUrl(false)
     setUpliftAndDisposal(Boolean(item.upliftAndDisposal))
     setFurniture(Boolean(item.furniture))
     setAssignedTo((item as any).assignedTo || 'tom')
@@ -918,13 +921,49 @@ function TrackerApp() {
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">
                     Google Drive Folder
                   </label>
-                  <input
-                    type="url"
-                    value={googleDriveUrl}
-                    onChange={(e) => setGoogleDriveUrl(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                    placeholder="Paste the customer folder link"
-                  />
+                  {googleDriveUrl.trim() && !editingDriveUrl ? (
+                    <div className="flex items-center justify-between gap-3 w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl">
+                      <a
+                        href={googleDriveUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-sky-300 hover:text-sky-200 transition-colors min-w-0"
+                      >
+                        <FolderOpen className="w-4 h-4 shrink-0 text-sky-400/80" />
+                        <span className="truncate underline underline-offset-2">
+                          {customerName.trim() || 'Open folder'}
+                        </span>
+                      </a>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setEditingDriveUrl(true)}
+                          className="text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                        >
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGoogleDriveUrl('')
+                            setEditingDriveUrl(false)
+                          }}
+                          className="text-xs font-semibold text-slate-400 hover:text-red-300 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="url"
+                      value={googleDriveUrl}
+                      onChange={(e) => setGoogleDriveUrl(e.target.value)}
+                      onBlur={() => googleDriveUrl.trim() && setEditingDriveUrl(false)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      placeholder="Paste the customer folder link"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Assigned To</label>
@@ -1183,7 +1222,7 @@ function TrackerApp() {
                             className="inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 mt-1 transition-colors"
                           >
                             <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
-                            <span>Open plans folder</span>
+                            <span className="underline underline-offset-2">{item.customerName}</span>
                           </a>
                         )}
                         {item.assignedTo && (
