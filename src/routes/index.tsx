@@ -17,6 +17,9 @@ import {
   Database,
   Filter,
   Archive,
+  X,
+  Phone,
+  FolderOpen,
 } from 'lucide-react'
 import {
   login,
@@ -36,13 +39,16 @@ export const Route = createFileRoute('/')({
 interface WorkItem {
   id: number
   customerName: string
+  customerPhone?: string | null
   site: string
   status: string
   notes: string | null
   whatsRequired: string
   whereNeedsMeasuring: string
+  googleDriveUrl?: string | null
   samples?: string | null
-  carpetAndFlooringOrdered?: boolean
+  upliftAndDisposal?: boolean
+  furniture?: boolean
   carpetOrderedDate?: string | null
   carpetCostPerSqm?: string | null
   measuredBy?: string | null
@@ -77,13 +83,16 @@ function TrackerApp() {
   const [formMode, setFormMode] = useState<'none' | 'add' | 'edit'>('none')
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
   const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
   const [site, setSite] = useState('')
   const [status, setStatus] = useState('Measure booked')
   const [whatsRequired, setWhatsRequired] = useState('')
   const [whereNeedsMeasuring, setWhereNeedsMeasuring] = useState('')
   const [notes, setNotes] = useState('')
   const [samples, setSamples] = useState('')
-  const [carpetAndFlooringOrdered, setCarpetAndFlooringOrdered] = useState(false)
+  const [googleDriveUrl, setGoogleDriveUrl] = useState('')
+  const [upliftAndDisposal, setUpliftAndDisposal] = useState(false)
+  const [furniture, setFurniture] = useState(false)
   const [assignedTo, setAssignedTo] = useState<'tom' | 'chris'>('tom')
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [carpetCostPerSqm, setCarpetCostPerSqm] = useState('')
@@ -106,6 +115,26 @@ function TrackerApp() {
 
   // Active vs Archive view ("Completed" jobs are archived out of the main list)
   const [view, setView] = useState<'active' | 'archive'>('active')
+
+  useEffect(() => {
+    if (formMode === 'none') {
+      return
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setFormMode('none')
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [formMode])
 
   // Check auth on mount
   useEffect(() => {
@@ -223,13 +252,16 @@ function TrackerApp() {
   // Open Form for Adding
   const openAddForm = () => {
     setCustomerName('')
+    setCustomerPhone('')
     setSite('')
     setStatus('Measure booked')
     setWhatsRequired('')
     setWhereNeedsMeasuring('')
     setNotes('')
     setSamples('')
-    setCarpetAndFlooringOrdered(false)
+    setGoogleDriveUrl('')
+    setUpliftAndDisposal(false)
+    setFurniture(false)
     setAssignedTo('tom')
     setCarpetOrderedDate('')
     setCarpetCostPerSqm('')
@@ -244,13 +276,16 @@ function TrackerApp() {
   const openEditForm = (item: WorkItem) => {
     setSelectedItemId(item.id)
     setCustomerName(item.customerName)
+    setCustomerPhone(item.customerPhone || '')
     setSite(item.site)
     setStatus(item.status)
     setWhatsRequired(item.whatsRequired)
     setWhereNeedsMeasuring(item.whereNeedsMeasuring)
     setNotes(item.notes || '')
     setSamples((item as any).samples || '')
-    setCarpetAndFlooringOrdered(Boolean(item.carpetAndFlooringOrdered))
+    setGoogleDriveUrl(item.googleDriveUrl || '')
+    setUpliftAndDisposal(Boolean(item.upliftAndDisposal))
+    setFurniture(Boolean(item.furniture))
     setAssignedTo((item as any).assignedTo || 'tom')
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
     setCarpetCostPerSqm((item as any).carpetCostPerSqm || '')
@@ -284,6 +319,7 @@ function TrackerApp() {
         await createWorkItem({
           data: {
             customerName,
+            customerPhone,
             site,
             status,
             assignedTo,
@@ -291,7 +327,9 @@ function TrackerApp() {
             whereNeedsMeasuring,
             notes,
             samples,
-            carpetAndFlooringOrdered,
+            googleDriveUrl,
+            upliftAndDisposal,
+            furniture,
             measuredBy,
             measuredBooked,
             fittingDate,
@@ -304,6 +342,7 @@ function TrackerApp() {
           data: {
             id: selectedItemId,
             customerName,
+            customerPhone,
             site,
             status,
             assignedTo,
@@ -311,7 +350,9 @@ function TrackerApp() {
             whereNeedsMeasuring,
             notes,
             samples,
-            carpetAndFlooringOrdered,
+            googleDriveUrl,
+            upliftAndDisposal,
+            furniture,
             measuredBy,
             measuredBooked,
             fittingDate,
@@ -358,6 +399,11 @@ function TrackerApp() {
     })
   }
 
+  const getDialHref = (phone: string) => {
+    const dialable = phone.replace(/[^\d+]/g, '')
+    return dialable ? `tel:${dialable}` : '#'
+  }
+
   // Completed jobs are archived: they leave the main list and live in the Archive view.
   const activeItems = workItemsList.filter((item) => item.status !== 'Completed')
   const archivedItems = workItemsList.filter((item) => item.status === 'Completed')
@@ -366,7 +412,9 @@ function TrackerApp() {
   const filteredItems = (view === 'archive' ? archivedItems : activeItems).filter((item) => {
     const matchesSearch =
       item.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.customerPhone && item.customerPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.site.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.googleDriveUrl && item.googleDriveUrl.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.whatsRequired.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.whereNeedsMeasuring.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -713,23 +761,38 @@ function TrackerApp() {
           </div>
         )}
 
-        {/* Dynamic Modal / Inline Form for Add & Edit */}
+        {/* Dynamic Modal for Add & Edit */}
         {formMode !== 'none' && (
-          <div className="bg-slate-900 rounded-3xl border border-emerald-500/20 overflow-hidden shadow-xl shadow-emerald-950/5">
-            <div className="px-6 py-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto px-3 py-4 sm:px-6 sm:py-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="work-item-form-title"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setFormMode('none')
+              }
+            }}
+          >
+            <div className="w-full max-w-5xl mx-auto bg-slate-900 rounded-2xl border border-emerald-500/20 overflow-hidden shadow-2xl shadow-slate-950/60">
+            <div className="sticky top-0 z-10 px-4 py-3 sm:px-6 sm:py-4 bg-slate-900/95 backdrop-blur border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clipboard className="w-5 h-5 text-emerald-400" />
-                {formMode === 'add' ? 'Add New Work Item' : 'Edit Work Item'}
+                <span id="work-item-form-title">
+                  {formMode === 'add' ? 'Add New Work Item' : 'Edit Work Item'}
+                </span>
               </h3>
               <button
+                type="button"
                 onClick={() => setFormMode('none')}
-                className="text-slate-400 hover:text-slate-200 text-sm font-semibold cursor-pointer"
+                className="p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800/70 transition-all cursor-pointer"
+                title="Close form"
               >
-                Cancel
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleFormSubmit} className="p-4 sm:p-6 space-y-6">
               {formError && (
                 <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 flex items-center gap-2 border border-red-500/25">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -749,6 +812,19 @@ function TrackerApp() {
                     required
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                     placeholder="Enter customer name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                    Customer Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Enter phone number"
                   />
                 </div>
 
@@ -837,6 +913,19 @@ function TrackerApp() {
                     placeholder="Samples required or notes about samples"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                    Google Drive Folder
+                  </label>
+                  <input
+                    type="url"
+                    value={googleDriveUrl}
+                    onChange={(e) => setGoogleDriveUrl(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    placeholder="Paste the customer folder link"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Assigned To</label>
                   <select
@@ -848,6 +937,26 @@ function TrackerApp() {
                     <option value="chris">Chris</option>
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 cursor-pointer hover:border-emerald-500/40 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={upliftAndDisposal}
+                    onChange={(e) => setUpliftAndDisposal(e.target.checked)}
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                  Uplift and disposal
+                </label>
+                <label className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 cursor-pointer hover:border-emerald-500/40 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={furniture}
+                    onChange={(e) => setFurniture(e.target.checked)}
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                  Furniture
+                </label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
@@ -960,6 +1069,7 @@ function TrackerApp() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         )}
 
@@ -1056,6 +1166,26 @@ function TrackerApp() {
                           <MapPin className="w-3.5 h-3.5 text-emerald-500/80" />
                           <span>{item.site}</span>
                         </div>
+                        {item.customerPhone && (
+                          <a
+                            href={getDialHref(item.customerPhone)}
+                            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-emerald-300 mt-1 transition-colors"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
+                            <span>{item.customerPhone}</span>
+                          </a>
+                        )}
+                        {item.googleDriveUrl && (
+                          <a
+                            href={item.googleDriveUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 mt-1 transition-colors"
+                          >
+                            <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
+                            <span>Open plans folder</span>
+                          </a>
+                        )}
                         {item.assignedTo && (
                           <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
                             <Briefcase className="w-3.5 h-3.5 text-violet-400/80" />
@@ -1099,6 +1229,21 @@ function TrackerApp() {
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
                             {(item as any).samples}
                           </p>
+                        </div>
+                      )}
+
+                      {(item.upliftAndDisposal || item.furniture) && (
+                        <div className="flex flex-wrap gap-2">
+                          {item.upliftAndDisposal && (
+                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                              Uplift and disposal
+                            </span>
+                          )}
+                          {item.furniture && (
+                            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-300">
+                              Furniture
+                            </span>
+                          )}
                         </div>
                       )}
 
