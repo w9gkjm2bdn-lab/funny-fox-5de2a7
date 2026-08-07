@@ -117,6 +117,72 @@ function TrackerApp() {
   // Active vs Archive view ("Completed" jobs are archived out of the main list)
   const [view, setView] = useState<'active' | 'archive'>('active')
 
+  // Which cards have their secondary details expanded, and which are mid status-update
+  const [expandedCards, setExpandedCards] = useState<Record<number, boolean>>({})
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null)
+
+  const toggleCard = (id: number) => {
+    setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  // Inline status change straight from a card, without opening the full editor.
+  const handleStatusChange = async (item: WorkItem, newStatus: string) => {
+    if (newStatus === item.status) return
+    // Optimistic update so the list feels instant in the field.
+    setWorkItemsList((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: newStatus } : i)))
+    setStatusUpdatingId(item.id)
+    try {
+      await updateWorkItem({
+        data: {
+          id: item.id,
+          customerName: item.customerName,
+          customerPhone: item.customerPhone || '',
+          site: item.site,
+          status: newStatus,
+          assignedTo: (item.assignedTo as 'tom' | 'chris') || 'tom',
+          whatsRequired: item.whatsRequired,
+          whereNeedsMeasuring: item.whereNeedsMeasuring,
+          notes: item.notes || '',
+          samples: item.samples || '',
+          googleDriveUrl: item.googleDriveUrl || '',
+          upliftAndDisposal: Boolean(item.upliftAndDisposal),
+          furniture: Boolean(item.furniture),
+          measuredBy: item.measuredBy || '',
+          measuredBooked: item.measuredBooked || '',
+          fittingDate: item.fittingDate || '',
+          carpetOrderedDate: item.carpetOrderedDate || '',
+          carpetCostPerSqm: item.carpetCostPerSqm || '',
+        },
+      })
+      await fetchWorkItems()
+    } catch (err) {
+      console.error('Status update error:', err)
+      // Roll back on failure.
+      await fetchWorkItems()
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
+  // Shared status options + badge styling so cards and filters stay consistent.
+  const STATUS_OPTIONS = ['Pending', 'Measure booked', 'Fitting booked', 'Quote sent', 'In progress', 'Completed']
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'Completed':
+        return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+      case 'In progress':
+        return 'bg-sky-500/10 text-sky-300 border-sky-500/25'
+      case 'Measure booked':
+        return 'bg-teal-500/10 text-teal-300 border-teal-500/25'
+      case 'Fitting booked':
+        return 'bg-violet-500/10 text-violet-300 border-violet-500/25'
+      case 'Quote sent':
+        return 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+      default:
+        return 'bg-slate-500/10 text-slate-300 border-slate-500/25'
+    }
+  }
+
   useEffect(() => {
     if (formMode === 'none') {
       return
@@ -803,6 +869,9 @@ function TrackerApp() {
                 </div>
               )}
 
+              <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                Customer &amp; job
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">
@@ -905,6 +974,9 @@ function TrackerApp() {
                 />
               </div>
 
+              <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider pt-2 border-t border-slate-800">
+                Samples, files &amp; options
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Samples (Optional)</label>
@@ -997,6 +1069,9 @@ function TrackerApp() {
                   Furniture
                 </label>
               </div>
+              <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider pt-2 border-t border-slate-800">
+                Scheduling &amp; pricing
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet ordered</label>
@@ -1169,171 +1244,192 @@ function TrackerApp() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredItems.map((item) => {
-              // Status Badge Coloring
-              let statusBadgeClass = ''
-              if (item.status === 'Completed') {
-                statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              } else if (item.status === 'In progress') {
-                statusBadgeClass = 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-              } else if (item.status === 'Measure booked') {
-                statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              } else if (item.status === 'Fitting booked') {
-                statusBadgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
-              } else if (item.status === 'Quote sent') {
-                statusBadgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              } else if (item.status === 'Pending') {
-                statusBadgeClass = 'bg-slate-500/10 text-slate-300 border border-slate-500/20'
-              } else {
-                statusBadgeClass = 'bg-slate-700/10 text-slate-300 border border-slate-700/20'
-              }
+              const fittingList = (item.fittingDate || '')
+                .split(',')
+                .map((d) => d.trim())
+                .filter(Boolean)
+              const hasExtras =
+                Boolean(item.notes) ||
+                Boolean(item.samples) ||
+                Boolean(item.carpetOrderedDate) ||
+                Boolean(item.carpetCostPerSqm) ||
+                item.upliftAndDisposal ||
+                item.furniture
+              const isExpanded = Boolean(expandedCards[item.id])
 
               return (
                 <div
                   key={item.id}
-                  className="bg-slate-900/40 rounded-2xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/65 transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-md hover:shadow-xl"
+                  className="bg-slate-900/40 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors flex flex-col overflow-hidden shadow-md"
                 >
-                  <div className="p-6 space-y-4">
-                    {/* Customer & Location */}
-                    <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-3">
-                      <div>
-                        <h4 className="font-bold text-white text-lg tracking-tight group-hover:text-emerald-400 transition-colors">
+                  <div className="p-5 space-y-4">
+                    {/* Header: customer + inline status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-white text-lg tracking-tight truncate">
                           {item.customerName}
                         </h4>
                         <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-500/80" />
-                          <span>{item.site}</span>
+                          <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span className="truncate">{item.site}</span>
                         </div>
-                        {item.customerPhone && (
-                          <a
-                            href={getDialHref(item.customerPhone)}
-                            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-emerald-300 mt-1 transition-colors"
-                          >
-                            <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
-                            <span>{item.customerPhone}</span>
-                          </a>
-                        )}
-                        {item.googleDriveUrl && (
-                          <a
-                            href={item.googleDriveUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 mt-1 transition-colors"
-                          >
-                            <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
-                            <span className="underline underline-offset-2">{item.customerName}</span>
-                          </a>
-                        )}
-                        {item.assignedTo && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                            <Briefcase className="w-3.5 h-3.5 text-violet-400/80" />
-                            <span className="capitalize">Assigned to {item.assignedTo}</span>
-                          </div>
-                        )}
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${statusBadgeClass}`}>
-                        {item.status}
-                      </span>
+                      <div className="relative shrink-0">
+                        <select
+                          value={item.status}
+                          onChange={(e) => handleStatusChange(item, e.target.value)}
+                          disabled={statusUpdatingId === item.id}
+                          className={`appearance-none cursor-pointer rounded-full border pl-2.5 pr-6 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 ${getStatusBadgeClass(item.status)}`}
+                          title="Change status"
+                        >
+                          {STATUS_OPTIONS.map((s) => (
+                            <option key={s} value={s} className="bg-slate-900 text-slate-100">
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <Filter className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-70" />
+                      </div>
                     </div>
 
-                    {/* Requirements / Details */}
-                    <div className="space-y-3.5">
+                    {/* Quick contact row */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                      {item.customerPhone && (
+                        <a
+                          href={getDialHref(item.customerPhone)}
+                          className="inline-flex items-center gap-1.5 text-slate-300 hover:text-emerald-300 transition-colors"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
+                          <span>{item.customerPhone}</span>
+                        </a>
+                      )}
+                      {item.assignedTo && (
+                        <span className="inline-flex items-center gap-1.5 text-slate-400">
+                          <User className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="capitalize">{item.assignedTo}</span>
+                        </span>
+                      )}
+                      {item.googleDriveUrl && (
+                        <a
+                          href={item.googleDriveUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sky-300 hover:text-sky-200 transition-colors"
+                        >
+                          <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
+                          <span className="underline underline-offset-2">Folder</span>
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Core requirement summary */}
+                    <div className="space-y-2.5">
                       <div>
-                        <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">What’s Required</p>
-                        <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Required</p>
+                        <p className="text-sm text-slate-200 leading-relaxed mt-0.5 line-clamp-2">
                           {item.whatsRequired}
                         </p>
                       </div>
-
                       <div>
-                        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wider">Where Needs Measuring</p>
-                        <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Where</p>
+                        <p className="text-sm text-slate-200 leading-relaxed mt-0.5 line-clamp-2">
                           {item.whereNeedsMeasuring}
                         </p>
                       </div>
-
-                      {item.notes && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Notes</p>
-                          <p className="text-xs text-slate-400 leading-relaxed italic mt-0.5 whitespace-pre-line">
-                            {item.notes}
-                          </p>
-                        </div>
-                      )}
-
-                      {(item as any).samples && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">Samples</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
-                            {(item as any).samples}
-                          </p>
-                        </div>
-                      )}
-
-                      {(item.upliftAndDisposal || item.furniture) && (
-                        <div className="flex flex-wrap gap-2">
-                          {item.upliftAndDisposal && (
-                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
-                              Uplift and disposal
-                            </span>
-                          )}
-                          {item.furniture && (
-                            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-300">
-                              Furniture
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {item.carpetOrderedDate && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet ordered</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
-                        </div>
-                      )}
-                      {item.carpetCostPerSqm && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Carpet cost per m² (excl. VAT)</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">£{item.carpetCostPerSqm}</p>
-                        </div>
-                      )}
-                      {item.measuredBooked && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Measure booked</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.measuredBooked).toLocaleDateString()}</p>
-                        </div>
-                      )}
-                      {item.fittingDate && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                            Fitting date{item.fittingDate.includes(',') ? 's' : ''}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5 mt-1">
-                            {item.fittingDate
-                              .split(',')
-                              .map((d) => d.trim())
-                              .filter(Boolean)
-                              .map((d, i) => (
-                                <span
-                                  key={i}
-                                  className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/60 border border-slate-700/50 rounded-lg px-2 py-0.5"
-                                >
-                                  {new Date(d).toLocaleDateString()}
-                                </span>
-                              ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
+
+                    {/* Key schedule chips (always visible) */}
+                    {(item.measuredBooked || fittingList.length > 0) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.measuredBooked && (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800/70 border border-slate-700/50 px-2 py-0.5 text-xs text-slate-300">
+                            <Clock className="w-3 h-3 text-teal-400/80" />
+                            Measure {new Date(item.measuredBooked).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                        {fittingList.map((d, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-lg bg-slate-800/70 border border-slate-700/50 px-2 py-0.5 text-xs text-slate-300"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-violet-400/80" />
+                            Fit {new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Secondary details (collapsible) */}
+                    {hasExtras && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleCard(item.id)}
+                          className="text-xs font-semibold text-slate-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? 'Hide details' : 'Show details'}
+                        </button>
+                        {isExpanded && (
+                          <div className="space-y-3 pt-1 border-t border-slate-800/70">
+                            {(item.upliftAndDisposal || item.furniture) && (
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {item.upliftAndDisposal && (
+                                  <span className="rounded-full border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs font-semibold text-slate-300">
+                                    Uplift &amp; disposal
+                                  </span>
+                                )}
+                                {item.furniture && (
+                                  <span className="rounded-full border border-slate-700/60 bg-slate-800/60 px-2.5 py-1 text-xs font-semibold text-slate-300">
+                                    Furniture
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {item.samples && (
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Samples</p>
+                                <p className="text-sm text-slate-300 leading-relaxed mt-0.5">{item.samples}</p>
+                              </div>
+                            )}
+                            {item.notes && (
+                              <div>
+                                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Notes</p>
+                                <p className="text-xs text-slate-400 leading-relaxed italic mt-0.5 whitespace-pre-line">
+                                  {item.notes}
+                                </p>
+                              </div>
+                            )}
+                            {(item.carpetOrderedDate || item.carpetCostPerSqm) && (
+                              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                {item.carpetOrderedDate && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Carpet ordered</p>
+                                    <p className="text-sm text-slate-300 mt-0.5">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
+                                  </div>
+                                )}
+                                {item.carpetCostPerSqm && (
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Cost / m² (excl. VAT)</p>
+                                    <p className="text-sm text-slate-300 mt-0.5">£{item.carpetCostPerSqm}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Actions & Timestamps Footer */}
-                  <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800/50 flex items-center justify-between text-xs text-slate-500 mt-auto">
+                  <div className="px-5 py-3 bg-slate-950/70 border-t border-slate-800/50 flex items-center justify-between text-xs text-slate-500 mt-auto">
                     <span title={`Updated: ${new Date(item.updatedAt).toLocaleString()}`}>
-                      Updated: {new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      Updated {new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </span>
-                    
+
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEditForm(item)}
