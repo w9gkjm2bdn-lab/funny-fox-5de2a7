@@ -22,7 +22,9 @@ export default function WorkCalendar() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/calendar/events');
+        // Use Netlify Functions path. When running in Netlify dev or deployed site
+        // the functions are available at /.netlify/functions/<name>
+        const res = await fetch('/.netlify/functions/calendar-events');
         if (!res.ok) throw new Error('Failed to load events');
         const data = await res.json();
         // Expecting server returns [{ id, title, start, end, allDay, ... }]
