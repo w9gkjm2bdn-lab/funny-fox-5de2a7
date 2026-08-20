@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { db } from "../../db/index.js";
-import { users, workItems } from "../../db/schema.js";
+import { users, workItems, calendarEvents } from "../../db/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
 
@@ -243,6 +243,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
     carpetCostPerSqm: z.string().optional(),
+    what3words: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -271,6 +272,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         fittingDate: data.fittingDate || "",
         carpetOrderedDate: data.carpetOrderedDate || "",
         carpetCostPerSqm: data.carpetCostPerSqm || "",
+        what3words: data.what3words || "",
       })
       .returning();
       
@@ -298,6 +300,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
     carpetCostPerSqm: z.string().optional(),
+    what3words: z.string().optional(),
   }))
   .handler(async ({ data }) => {
     const user = await getAuthenticatedUser();
@@ -320,6 +323,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
         fittingDate: values.fittingDate || "",
         carpetOrderedDate: (values as any).carpetOrderedDate || "",
         carpetCostPerSqm: (values as any).carpetCostPerSqm || "",
+        what3words: (values as any).what3words || "",
         updatedAt: new Date(),
       })
       .where(eq(workItems.id, id))
@@ -346,5 +350,103 @@ export const deleteWorkItem = createServerFn({ method: "POST" })
       .delete(workItems)
       .where(eq(workItems.id, data.id));
       
+    return { success: true };
+  });
+
+export const getCalendarEvents = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    return db
+      .select()
+      .from(calendarEvents)
+      .orderBy(desc(calendarEvents.date));
+  });
+
+export const createCalendarEvent = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    title: z.string().min(1, "Title is required"),
+    date: z.string().min(1, "Date is required"),
+    endDate: z.string().optional(),
+    notes: z.string().optional(),
+    eventType: z.string().default("general"),
+    assignedTo: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    const [newEvent] = await db
+      .insert(calendarEvents)
+      .values({
+        title: data.title,
+        date: data.date,
+        endDate: data.endDate || "",
+        notes: data.notes || "",
+        eventType: data.eventType || "general",
+        assignedTo: data.assignedTo || "",
+      })
+      .returning();
+
+    return newEvent;
+  });
+
+export const updateCalendarEvent = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    id: z.number(),
+    title: z.string().min(1, "Title is required"),
+    date: z.string().min(1, "Date is required"),
+    endDate: z.string().optional(),
+    notes: z.string().optional(),
+    eventType: z.string().default("general"),
+    assignedTo: z.string().optional(),
+  }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    const { id, ...values } = data;
+
+    const [updatedEvent] = await db
+      .update(calendarEvents)
+      .set({
+        ...values,
+        endDate: values.endDate || "",
+        notes: values.notes || "",
+        eventType: values.eventType || "general",
+        assignedTo: values.assignedTo || "",
+        updatedAt: new Date(),
+      })
+      .where(eq(calendarEvents.id, id))
+      .returning();
+
+    if (!updatedEvent) {
+      throw new Error("Calendar event not found");
+    }
+
+    return updatedEvent;
+  });
+
+export const deleteCalendarEvent = createServerFn({ method: "POST" })
+  .inputValidator(z.object({
+    id: z.number(),
+  }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    await db
+      .delete(calendarEvents)
+      .where(eq(calendarEvents.id, data.id));
+
     return { success: true };
   });

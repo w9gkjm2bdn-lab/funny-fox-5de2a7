@@ -1,0 +1,1 @@
+ALTER TABLE "work_items" ADD COLUMN "what3words" text;

@@ -30,6 +30,19 @@ export const workItems = pgTable("work_items", {
   fittingDate: text("fitting_date"),
   carpetOrderedDate: text("carpet_ordered_date"),
   carpetCostPerSqm: text("carpet_cost_per_sqm"),
+  what3words: text("what3words"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  date: text("date").notNull(), // ISO YYYY-MM-DD or date string
+  endDate: text("end_date"), // optional end date for multi-day
+  notes: text("notes"),
+  eventType: text("event_type").notNull().default("general"), // e.g. "fitting", "measure", "holiday", "general", "delivery"
+  assignedTo: text("assigned_to"), // e.g. "tom", "chris", or team
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -9,7 +9,7 @@ import { formatICS } from '../utils/ics';
 // import { db } from '../db';
 
 // Example getEvents handler (pseudo-code)
-export async function getEventsHandler(req: any, res: any) {
+export async function getEventsHandler(_req: any, res: any) {
   try {
     // Option A: If you have query params to limit range, parse them
     // const { from, to } = req.query;
@@ -21,7 +21,7 @@ export async function getEventsHandler(req: any, res: any) {
     // const rows = await db.select().from(workItems).where(...)
 
     // For now return an empty array or mock
-    const events = [];
+    const events: any[] = [];
 
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;

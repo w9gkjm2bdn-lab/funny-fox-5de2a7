@@ -20,6 +20,8 @@ import {
   X,
   Phone,
   FolderOpen,
+  Calendar as CalendarIcon,
+  ExternalLink,
 } from 'lucide-react'
 import {
   login,
@@ -30,7 +32,14 @@ import {
   updateWorkItem,
   deleteWorkItem,
   updateUserProfile,
+  getCalendarEvents,
+  createCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
 } from '../server/tracker.functions'
+import WorkCalendarModal, { CalendarEventItem } from '../components/WorkCalendar'
+import AddToCalendarButton from '../components/AddToCalendarButton'
+import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
 
 export const Route = createFileRoute('/')({
   component: TrackerApp,
@@ -55,6 +64,7 @@ interface WorkItem {
   measuredBooked?: string | null
   fittingDate?: string | null
   assignedTo?: string | null
+  what3words?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -85,6 +95,7 @@ function TrackerApp() {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [site, setSite] = useState('')
+  const [what3words, setWhat3words] = useState('')
   const [status, setStatus] = useState('Measure booked')
   const [whatsRequired, setWhatsRequired] = useState('')
   const [whereNeedsMeasuring, setWhereNeedsMeasuring] = useState('')
@@ -98,8 +109,9 @@ function TrackerApp() {
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [carpetCostPerSqm, setCarpetCostPerSqm] = useState('')
   const [measuredBy, setMeasuredBy] = useState('')
-  const [measuredBooked, setMeasuredBooked] = useState('')
-  const [fittingDates, setFittingDates] = useState<string[]>([''])
+  const [measuredBookedDate, setMeasuredBookedDate] = useState('')
+  const [measuredBookedTime, setMeasuredBookedTime] = useState('')
+  const [fittingSlots, setFittingSlots] = useState<{ date: string; time: string }[]>([{ date: '', time: '' }])
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -114,8 +126,22 @@ function TrackerApp() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
 
-  // Active vs Archive view ("Completed" jobs are archived out of the main list)
-  const [view, setView] = useState<'active' | 'archive'>('active')
+  // Active vs Archive vs Calendar view ("Completed" jobs are archived out of the main list)
+  const [view, setView] = useState<'active' | 'archive' | 'calendar'>('active')
+
+  // Calendar manual events state
+  const [calendarEventsList, setCalendarEventsList] = useState<CalendarEventItem[]>([])
+  const [calendarModalMode, setCalendarModalMode] = useState<'none' | 'add' | 'edit'>('none')
+  const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null)
+  const [calTitle, setCalTitle] = useState('')
+  const [calDate, setCalDate] = useState('')
+  const [calTime, setCalTime] = useState('')
+  const [calEndDate, setCalEndDate] = useState('')
+  const [calNotes, setCalNotes] = useState('')
+  const [calEventType, setCalEventType] = useState('general')
+  const [calAssignedTo, setCalAssignedTo] = useState('')
+  const [calFormError, setCalFormError] = useState<string | null>(null)
+  const [calFormSubmitting, setCalFormSubmitting] = useState(false)
 
   useEffect(() => {
     if (formMode === 'none') {
@@ -144,7 +170,7 @@ function TrackerApp() {
         const currentUser = await getCurrentUser()
         if (currentUser) {
           setUser(currentUser)
-          await fetchWorkItems()
+          await Promise.all([fetchWorkItems(), fetchCalendarEvents()])
         }
       } catch (err) {
         console.error('Failed to get current user:', err)
@@ -171,6 +197,110 @@ function TrackerApp() {
       console.error('Error fetching work items:', err)
     } finally {
       setItemsLoading(false)
+    }
+  }
+
+  // Fetch all calendar events
+  const fetchCalendarEvents = async () => {
+    try {
+      const data = await getCalendarEvents()
+      const mapped: CalendarEventItem[] = data.map((ev: any) => ({
+        ...ev,
+        createdAt: ev.createdAt instanceof Date ? ev.createdAt.toISOString() : String(ev.createdAt),
+        updatedAt: ev.updatedAt instanceof Date ? ev.updatedAt.toISOString() : String(ev.updatedAt),
+      }))
+      setCalendarEventsList(mapped)
+    } catch (err) {
+      console.error('Error fetching calendar events:', err)
+    }
+  }
+
+  const openAddCalendarModal = (presetDate?: string) => {
+    setSelectedCalendarEventId(null)
+    setCalTitle('')
+    const defaultDate = presetDate || (() => {
+      const today = new Date()
+      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    })()
+    const parsed = parseDateTimeString(defaultDate)
+    setCalDate(parsed.dateStr)
+    setCalTime(parsed.timeStr || '')
+    setCalEndDate('')
+    setCalNotes('')
+    setCalEventType('general')
+    setCalAssignedTo('')
+    setCalFormError(null)
+    setCalendarModalMode('add')
+  }
+
+  const openEditCalendarModal = (event: CalendarEventItem) => {
+    setSelectedCalendarEventId(event.id)
+    setCalTitle(event.title)
+    const parsed = parseDateTimeString(event.date)
+    setCalDate(parsed.dateStr)
+    setCalTime(parsed.timeStr || '')
+    setCalEndDate(event.endDate || '')
+    setCalNotes(event.notes || '')
+    setCalEventType(event.eventType || 'general')
+    setCalAssignedTo(event.assignedTo || '')
+    setCalFormError(null)
+    setCalendarModalMode('edit')
+  }
+
+  const handleCalendarFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCalFormError(null)
+
+    if (!calTitle.trim() || !calDate.trim()) {
+      setCalFormError('Title and Date are required')
+      return
+    }
+
+    const fullDate = calDate.trim() + (calTime.trim() ? `T${calTime.trim()}` : '')
+
+    setCalFormSubmitting(true)
+    try {
+      if (calendarModalMode === 'add') {
+        await createCalendarEvent({
+          data: {
+            title: calTitle.trim(),
+            date: fullDate,
+            endDate: calEndDate.trim() || undefined,
+            notes: calNotes.trim() || undefined,
+            eventType: calEventType,
+            assignedTo: calAssignedTo.trim() || undefined,
+          },
+        })
+      } else if (calendarModalMode === 'edit' && selectedCalendarEventId) {
+        await updateCalendarEvent({
+          data: {
+            id: selectedCalendarEventId,
+            title: calTitle.trim(),
+            date: fullDate,
+            endDate: calEndDate.trim() || undefined,
+            notes: calNotes.trim() || undefined,
+            eventType: calEventType,
+            assignedTo: calAssignedTo.trim() || undefined,
+          },
+        })
+      }
+      setCalendarModalMode('none')
+      await fetchCalendarEvents()
+    } catch (err: any) {
+      setCalFormError(err?.message || 'Failed to save calendar entry')
+    } finally {
+      setCalFormSubmitting(false)
+    }
+  }
+
+  const handleDeleteCalendarEvent = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this calendar entry?')) return
+    try {
+      await deleteCalendarEvent({ data: { id } })
+      await fetchCalendarEvents()
+    } catch (err) {
+      console.error('Delete calendar event error:', err)
+      alert('Failed to delete calendar entry')
     }
   }
 
@@ -255,6 +385,7 @@ function TrackerApp() {
     setCustomerName('')
     setCustomerPhone('')
     setSite('')
+    setWhat3words('')
     setStatus('Measure booked')
     setWhatsRequired('')
     setWhereNeedsMeasuring('')
@@ -268,8 +399,9 @@ function TrackerApp() {
     setCarpetOrderedDate('')
     setCarpetCostPerSqm('')
     setMeasuredBy('')
-    setMeasuredBooked('')
-    setFittingDates([''])
+    setMeasuredBookedDate('')
+    setMeasuredBookedTime('')
+    setFittingSlots([{ date: '', time: '' }])
     setFormError(null)
     setFormMode('add')
   }
@@ -280,6 +412,7 @@ function TrackerApp() {
     setCustomerName(item.customerName)
     setCustomerPhone(item.customerPhone || '')
     setSite(item.site)
+    setWhat3words((item as any).what3words || '')
     setStatus(item.status)
     setWhatsRequired(item.whatsRequired)
     setWhereNeedsMeasuring(item.whereNeedsMeasuring)
@@ -293,12 +426,21 @@ function TrackerApp() {
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
     setCarpetCostPerSqm((item as any).carpetCostPerSqm || '')
     setMeasuredBy((item as any).measuredBy || '')
-    setMeasuredBooked((item as any).measuredBooked || '')
+    
+    const parsedMeasure = parseDateTimeString((item as any).measuredBooked || '')
+    setMeasuredBookedDate(parsedMeasure.dateStr)
+    setMeasuredBookedTime(parsedMeasure.timeStr || '')
+
     const loadedFittingDates = ((item as any).fittingDate || '')
       .split(',')
       .map((d: string) => d.trim())
       .filter(Boolean)
-    setFittingDates(loadedFittingDates.length ? loadedFittingDates : [''])
+    
+    const slots = loadedFittingDates.map((raw: string) => {
+      const p = parseDateTimeString(raw)
+      return { date: p.dateStr, time: p.timeStr || '' }
+    })
+    setFittingSlots(slots.length ? slots : [{ date: '', time: '' }])
     setFormError(null)
     setFormMode('edit')
   }
@@ -313,8 +455,15 @@ function TrackerApp() {
       return
     }
 
-    // Multiple fitting dates are stored as a single comma-separated string.
-    const fittingDate = fittingDates.map((d) => d.trim()).filter(Boolean).join(',')
+    const measuredBooked = measuredBookedDate.trim()
+      ? (measuredBookedTime.trim() ? `${measuredBookedDate.trim()}T${measuredBookedTime.trim()}` : measuredBookedDate.trim())
+      : ''
+
+    // Multiple fitting dates stored as comma-separated YYYY-MM-DD or YYYY-MM-DDTHH:mm
+    const fittingDate = fittingSlots
+      .filter((s) => s.date.trim())
+      .map((s) => (s.time.trim() ? `${s.date.trim()}T${s.time.trim()}` : s.date.trim()))
+      .join(',')
 
     setFormSubmitting(true)
     try {
@@ -324,6 +473,7 @@ function TrackerApp() {
             customerName,
             customerPhone,
             site,
+            what3words: what3words.trim() || undefined,
             status,
             assignedTo,
             whatsRequired,
@@ -347,6 +497,7 @@ function TrackerApp() {
             customerName,
             customerPhone,
             site,
+            what3words: what3words.trim() || undefined,
             status,
             assignedTo,
             whatsRequired,
@@ -388,23 +539,28 @@ function TrackerApp() {
     }
   }
 
-  // Multi-day fitting date helpers (jobs can span several days)
-  const updateFittingDate = (index: number, value: string) => {
-    setFittingDates((prev) => prev.map((d, i) => (i === index ? value : d)))
+  // Multi-day fitting date & time helpers (jobs can span several days)
+  const updateFittingSlot = (index: number, field: 'date' | 'time', value: string) => {
+    setFittingSlots((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)))
   }
-  const addFittingDate = () => {
-    setFittingDates((prev) => [...prev, ''])
+  const addFittingSlot = () => {
+    setFittingSlots((prev) => [...prev, { date: '', time: '' }])
   }
-  const removeFittingDate = (index: number) => {
-    setFittingDates((prev) => {
+  const removeFittingSlot = (index: number) => {
+    setFittingSlots((prev) => {
       const next = prev.filter((_, i) => i !== index)
-      return next.length ? next : ['']
+      return next.length ? next : [{ date: '', time: '' }]
     })
   }
 
   const getDialHref = (phone: string) => {
     const dialable = phone.replace(/[^\d+]/g, '')
     return dialable ? `tel:${dialable}` : '#'
+  }
+
+  const getWhat3WordsHref = (w3w: string) => {
+    const clean = w3w.trim().replace(/^\/{1,3}/, '')
+    return `https://what3words.com/${encodeURIComponent(clean)}`
   }
 
   // Completed jobs are archived: they leave the main list and live in the Archive view.
@@ -417,6 +573,7 @@ function TrackerApp() {
       item.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.customerPhone && item.customerPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.site.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.what3words && item.what3words.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.googleDriveUrl && item.googleDriveUrl.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.whatsRequired.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.whereNeedsMeasuring.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -629,8 +786,8 @@ function TrackerApp() {
         </div>
 
         {/* Search, Filters and Create Action Block */}
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80">
-          <div className="flex flex-1 flex-col sm:flex-row gap-3">
+        <div className="flex flex-col md:flex-row gap-3 sm:gap-4 justify-between items-stretch md:items-center bg-slate-900/30 p-3.5 sm:p-4 rounded-2xl border border-slate-800/80">
+          <div className="flex flex-1 flex-col sm:flex-row gap-2.5 sm:gap-3">
             {/* Search Input */}
             <div className="relative flex-1">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -646,33 +803,49 @@ function TrackerApp() {
             </div>
 
             {/* Status Select Filter */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                disabled={view === 'archive'}
-                className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="All">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Measure booked">Measure booked</option>
-                <option value="Fitting booked">Fitting booked</option>
-                <option value="Quote sent">Quote sent</option>
-                <option value="In progress">In progress</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
-                <Filter className="w-4 h-4" />
+            {view !== 'calendar' && (
+              <div className="relative">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  disabled={view === 'archive'}
+                  className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Measure booked">Measure booked</option>
+                  <option value="Fitting booked">Fitting booked</option>
+                  <option value="Quote sent">Quote sent</option>
+                  <option value="In progress">In progress</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
+                  <Filter className="w-4 h-4" />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          <button
-            onClick={openAddForm}
-            className="flex items-center justify-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 transition-all cursor-pointer shadow-lg shadow-emerald-500/10"
-          >
-            <Plus className="w-4 h-4" />
-            Add Work Item
-          </button>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 shrink-0">
+            <button
+              onClick={() => setView(view === 'calendar' ? 'active' : 'calendar')}
+              className={`flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer border ${
+                view === 'calendar'
+                  ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-950 text-slate-300 hover:text-white hover:bg-slate-900 border-slate-800'
+              }`}
+              title="Toggle Schedule View"
+            >
+              <CalendarIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{view === 'calendar' ? 'Show Cards' : 'Schedule'}</span>
+            </button>
+            <button
+              onClick={openAddForm}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 transition-all cursor-pointer shadow-md shadow-emerald-500/10 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Add Job</span>
+            </button>
+          </div>
         </div>
 
         {profileOpen && (
@@ -843,6 +1016,25 @@ function TrackerApp() {
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                     placeholder="E.g. Main Office, North Wing, Sydney Branch"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>what3words Location (Optional)</span>
+                    <span className="text-xs text-rose-400 font-mono font-bold">///</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-rose-400 font-mono font-bold text-sm">
+                      ///
+                    </span>
+                    <input
+                      type="text"
+                      value={what3words.replace(/^\/{1,3}/, '')}
+                      onChange={(e) => setWhat3words(e.target.value ? `///${e.target.value.replace(/^\/{1,3}/, '')}` : '')}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-rose-500 focus:border-rose-500 text-sm font-mono"
+                      placeholder="e.g. filled.count.soap"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1026,34 +1218,56 @@ function TrackerApp() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">Measure booked</label>
-                  <input
-                    type="date"
-                    value={measuredBooked}
-                    onChange={(e) => setMeasuredBooked(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                  />
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <span>Measure booked</span>
+                    <span className="text-[11px] text-slate-500 font-normal">Defaults to 1 hr</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <input
+                      type="date"
+                      value={measuredBookedDate}
+                      onChange={(e) => setMeasuredBookedDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={measuredBookedTime}
+                        onChange={(e) => setMeasuredBookedTime(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-300 mb-1.5">
-                  Fitting date(s)
-                </label>
-                <p className="text-xs text-slate-500 mb-2">Add more than one date for jobs that span multiple days.</p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-300">
+                    Fitting date(s) & start times
+                  </label>
+                  <span className="text-[11px] text-slate-500 font-normal">Defaults to 1 hr duration</span>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">Select the date and optional start time for each day of the fitting.</p>
                 <div className="space-y-2.5">
-                  {fittingDates.map((date, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                  {fittingSlots.map((slot, index) => (
+                    <div key={index} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <input
                         type="date"
-                        value={date}
-                        onChange={(e) => updateFittingDate(index, e.target.value)}
+                        value={slot.date}
+                        onChange={(e) => updateFittingSlot(index, 'date', e.target.value)}
                         className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      />
+                      <input
+                        type="time"
+                        value={slot.time}
+                        onChange={(e) => updateFittingSlot(index, 'time', e.target.value)}
+                        className="w-full sm:w-36 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                       />
                       <button
                         type="button"
-                        onClick={() => removeFittingDate(index)}
-                        disabled={fittingDates.length === 1 && !date}
-                        className="p-2.5 text-slate-400 hover:text-red-400 rounded-xl hover:bg-red-500/10 border border-slate-800 hover:border-red-500/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() => removeFittingSlot(index)}
+                        disabled={fittingSlots.length === 1 && !slot.date && !slot.time}
+                        className="p-2.5 text-slate-400 hover:text-red-400 rounded-xl hover:bg-red-500/10 border border-slate-800 hover:border-red-500/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
                         title="Remove this date"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1063,7 +1277,7 @@ function TrackerApp() {
                 </div>
                 <button
                   type="button"
-                  onClick={addFittingDate}
+                  onClick={addFittingSlot}
                   className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-500/10 border border-slate-800 hover:border-emerald-500/20 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
@@ -1112,42 +1326,77 @@ function TrackerApp() {
           </div>
         )}
 
-        {/* Active / Archive Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-800">
+        {/* Navigation Tabs: Active Jobs | Schedule | Archive */}
+        <div className="flex items-center gap-1 sm:gap-2 border-b border-slate-800 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setView('active')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               view === 'active'
                 ? 'border-emerald-500 text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Briefcase className="w-4 h-4" />
-            Active Jobs
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300">
+            <Briefcase className="w-4 h-4 shrink-0" />
+            <span>Active Jobs</span>
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300">
               {activeItems.length}
             </span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setView('calendar')}
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              view === 'calendar'
+                ? 'border-emerald-500 text-white'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>Schedule</span>
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              {workItemsList.filter((i) => i.measuredBooked || i.fittingDate).length + calendarEventsList.length}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setView('archive')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               view === 'archive'
                 ? 'border-emerald-500 text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Archive className="w-4 h-4" />
-            Archive
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300">
+            <Archive className="w-4 h-4 shrink-0" />
+            <span>Archive</span>
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300">
               {archivedItems.length}
             </span>
           </button>
         </div>
 
-        {/* Work Items Listing Grid / View */}
-        {itemsLoading && workItemsList.length === 0 ? (
+        {/* View Content: Calendar vs Work Item Cards */}
+        {view === 'calendar' ? (
+          <WorkCalendarModal
+            workItems={workItemsList}
+            manualEvents={calendarEventsList}
+            onOpenJob={(job) => {
+              openEditForm(job as any)
+            }}
+            onAddManualEvent={(presetDate) => {
+              openAddCalendarModal(presetDate)
+            }}
+            onEditManualEvent={(event) => {
+              openEditCalendarModal(event)
+            }}
+            onDeleteManualEvent={(id) => {
+              handleDeleteCalendarEvent(id)
+            }}
+            currentUser={user}
+          />
+        ) : itemsLoading && workItemsList.length === 0 ? (
           <div className="py-16 text-center">
             <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
             <p className="text-slate-400">Loading work database...</p>
@@ -1197,36 +1446,69 @@ function TrackerApp() {
                   <div className="p-6 space-y-4">
                     {/* Customer & Location */}
                     <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-3">
-                      <div>
+                      <div className="space-y-1.5 flex-1 min-w-0">
                         <h4 className="font-bold text-white text-lg tracking-tight group-hover:text-emerald-400 transition-colors">
                           {item.customerName}
                         </h4>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-500/80" />
-                          <span>{item.site}</span>
-                        </div>
-                        {item.customerPhone && (
+
+                        {/* Highlighted Clickable Address */}
+                        <div>
                           <a
-                            href={getDialHref(item.customerPhone)}
-                            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-emerald-300 mt-1 transition-colors"
+                            href={`https://maps.google.com/?q=${encodeURIComponent(item.site)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-semibold transition-all shadow-sm group/site max-w-full"
+                            title="Open address in Maps"
                           >
-                            <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
-                            <span>{item.customerPhone}</span>
+                            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover/site:scale-110 transition-transform" />
+                            <span className="truncate">{item.site}</span>
+                            <ExternalLink className="w-3 h-3 text-emerald-400/70 group-hover/site:text-emerald-300 shrink-0 ml-0.5" />
                           </a>
+                        </div>
+
+                        {/* Clickable what3words */}
+                        {item.what3words && (
+                          <div>
+                            <a
+                              href={getWhat3WordsHref(item.what3words)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/25 hover:border-rose-500/40 text-xs font-mono font-semibold transition-all group/w3w max-w-full"
+                              title="Open location in what3words"
+                            >
+                              <span className="text-rose-400 font-bold">///</span>
+                              <span className="truncate">{item.what3words.trim().replace(/^\/{1,3}/, '')}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-rose-400/70 group-hover/w3w:text-rose-300 shrink-0 ml-0.5" />
+                            </a>
+                          </div>
+                        )}
+
+                        {item.customerPhone && (
+                          <div>
+                            <a
+                              href={getDialHref(item.customerPhone)}
+                              className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-emerald-300 transition-colors"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
+                              <span>{item.customerPhone}</span>
+                            </a>
+                          </div>
                         )}
                         {item.googleDriveUrl && (
-                          <a
-                            href={item.googleDriveUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 mt-1 transition-colors"
-                          >
-                            <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
-                            <span className="underline underline-offset-2">{item.customerName}</span>
-                          </a>
+                          <div>
+                            <a
+                              href={item.googleDriveUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs text-sky-300 hover:text-sky-200 transition-colors"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5 text-sky-400/80" />
+                              <span className="underline underline-offset-2">{item.customerName}</span>
+                            </a>
+                          </div>
                         )}
                         {item.assignedTo && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400">
                             <Briefcase className="w-3.5 h-3.5 text-violet-400/80" />
                             <span className="capitalize">Assigned to {item.assignedTo}</span>
                           </div>
@@ -1299,16 +1581,38 @@ function TrackerApp() {
                         </div>
                       )}
                       {item.measuredBooked && (
-                        <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Measure booked</p>
-                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.measuredBooked).toLocaleDateString()}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Measure booked</p>
+                            <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
+                              {formatDateTimeDisplay(item.measuredBooked, 1)}
+                            </p>
+                          </div>
+                          <AddToCalendarButton
+                            uid={`work-${item.id}-measure@worktracker`}
+                            title={`📏 Measure: ${item.customerName}`}
+                            dateStr={item.measuredBooked}
+                            location={item.site}
+                            details={`Where needs measuring: ${item.whereNeedsMeasuring}\nWhat's required: ${item.whatsRequired}${item.notes ? `\nNotes: ${item.notes}` : ''}${item.what3words ? `\nwhat3words: ${item.what3words}` : ''}`}
+                            compact={true}
+                          />
                         </div>
                       )}
                       {item.fittingDate && (
                         <div>
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                            Fitting date{item.fittingDate.includes(',') ? 's' : ''}
-                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">
+                              Fitting date{item.fittingDate.includes(',') ? 's' : ''}
+                            </p>
+                            <AddToCalendarButton
+                              uid={`work-${item.id}-fitting@worktracker`}
+                              title={`🔨 Fitting: ${item.customerName}`}
+                              dateStr={item.fittingDate.split(',')[0].trim()}
+                              location={item.site}
+                              details={`What's required: ${item.whatsRequired}${item.notes ? `\nNotes: ${item.notes}` : ''}${item.what3words ? `\nwhat3words: ${item.what3words}` : ''}`}
+                              compact={true}
+                            />
+                          </div>
                           <div className="flex flex-wrap gap-1.5 mt-1">
                             {item.fittingDate
                               .split(',')
@@ -1317,9 +1621,9 @@ function TrackerApp() {
                               .map((d, i) => (
                                 <span
                                   key={i}
-                                  className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/60 border border-slate-700/50 rounded-lg px-2 py-0.5"
+                                  className="text-sm text-slate-300 leading-relaxed font-medium bg-slate-800/60 border border-slate-700/50 rounded-lg px-2.5 py-1"
                                 >
-                                  {new Date(d).toLocaleDateString()}
+                                  {formatDateTimeDisplay(d, 1)}
                                 </span>
                               ))}
                           </div>
@@ -1354,6 +1658,156 @@ function TrackerApp() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Manual Calendar Event Add/Edit Modal */}
+        {calendarModalMode !== 'none' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">
+              <div className="px-6 py-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5 text-emerald-400" />
+                  {calendarModalMode === 'add' ? 'Add Calendar Entry' : 'Edit Calendar Entry'}
+                </h3>
+                <button
+                  onClick={() => setCalendarModalMode('none')}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCalendarFormSubmit} className="p-6 space-y-4">
+                {calFormError && (
+                  <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400 flex items-center gap-2 border border-red-500/25">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{calFormError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                    Event Title / Note <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={calTitle}
+                    onChange={(e) => setCalTitle(e.target.value)}
+                    placeholder="e.g. Workshop inventory, Supplier delivery, Tom off"
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={calDate}
+                      onChange={(e) => setCalDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>Start Time</span>
+                      <span className="text-[10px] text-slate-500 font-normal">1 hr default</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={calTime}
+                      onChange={(e) => setCalTime(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                      End Date (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={calEndDate}
+                      onChange={(e) => setCalEndDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                      Category / Type
+                    </label>
+                    <select
+                      value={calEventType}
+                      onChange={(e) => setCalEventType(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    >
+                      <option value="general">General Note / Task</option>
+                      <option value="measure">Measure Appointment</option>
+                      <option value="fitting">Fitting Appointment</option>
+                      <option value="delivery">Material / Carpet Delivery</option>
+                      <option value="holiday">Holiday / Day Off</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                      Assigned To (Optional)
+                    </label>
+                    <select
+                      value={calAssignedTo}
+                      onChange={(e) => setCalAssignedTo(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    >
+                      <option value="">Team / Anyone</option>
+                      <option value="tom">Tom</option>
+                      <option value="chris">Chris</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-300 mb-1.5">
+                    Notes / Details (Optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={calNotes}
+                    onChange={(e) => setCalNotes(e.target.value)}
+                    placeholder="Add any extra notes or requirements..."
+                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCalendarModalMode('none')}
+                    className="px-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={calFormSubmitting}
+                    className="flex items-center justify-center gap-2 px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/10"
+                  >
+                    {calFormSubmitting ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : calendarModalMode === 'add' ? (
+                      'Create Entry'
+                    ) : (
+                      'Save Entry'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
