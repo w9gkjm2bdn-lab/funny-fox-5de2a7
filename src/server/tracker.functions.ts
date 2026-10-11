@@ -2,11 +2,22 @@ import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { db } from "../../db/index.js";
-import { users, workItems, calendarEvents } from "../../db/schema.js";
+import { users, workItems, calendarEvents, notificationSubscriptions } from "../../db/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
+import * as webPush from "web-push";
 
-// Security Helper Functions
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webPush.setVapidDetails(
+    "mailto:admin@worktracker.local",
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY,
+  );
+}
+
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
@@ -55,7 +66,6 @@ function decryptSession(token: string): { userId: number; username: string; isAd
   }
 }
 
-// Database Seeding Helper
 async function ensureDefaultUsers() {
   try {
     const existingUsers = await db.select().from(users).limit(1);
@@ -66,10 +76,9 @@ async function ensureDefaultUsers() {
       ];
       await db.insert(users).values(defaultUsers);
     }
-    // Ensure known team accounts have admin privileges (idempotent)
     try {
-      await db.update(users).set({ isAdmin: true }).where(eq(users.username, 'chris'))
-      await db.update(users).set({ isAdmin: true }).where(eq(users.username, 'tom'))
+      await db.update(users).set({ isAdmin: true }).where(eq(users.username, "chris"));
+      await db.update(users).set({ isAdmin: true }).where(eq(users.username, "tom"));
     } catch (e) {
       // ignore if migration/state doesn't include column yet
     }
@@ -78,16 +87,43 @@ async function ensureDefaultUsers() {
   }
 }
 
-// Server-side Session Authentication Helper
 async function getAuthenticatedUser() {
   const sessionToken = getCookie("work_tracker_session");
   if (!sessionToken) return null;
   return decryptSession(sessionToken);
 }
 
-// ==========================================
-// SERVER FUNCTIONS
-// ==========================================
+async function notifyAllSubscribers(title: string, body: string) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    return;
+  }
+
+  const subscriptions = await db.select().from(notificationSubscriptions);
+
+  for (const subscription of subscriptions) {
+    try {
+      await webPush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
+          },
+        },
+        JSON.stringify({
+          title,
+          body,
+          tag: "work-tracker",
+        }),
+      );
+    } catch (error) {
+      console.warn("Failed to send push notification, deleting invalid subscription:", error);
+      await db
+        .delete(notificationSubscriptions)
+        .where(eq(notificationSubscriptions.endpoint, subscription.endpoint));
+    }
+  }
+}
 
 export const login = createServerFn({ method: "POST" })
   .inputValidator(z.object({
@@ -96,26 +132,26 @@ export const login = createServerFn({ method: "POST" })
   }))
   .handler(async ({ data }) => {
     await ensureDefaultUsers();
-    
+
     const [user] = await db
       .select()
       .from(users)
       .where(eq(users.username, data.username.toLowerCase()))
       .limit(1);
-      
+
     if (!user || !verifyPassword(data.password, user.passwordHash)) {
       throw new Error("Invalid username or password");
     }
-    
+
     const token = encryptSession(user.id, user.username, user.isAdmin);
-    
+
     setCookie("work_tracker_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: 30 * 24 * 60 * 60,
     });
-    
+
     return {
       userId: user.id,
       username: user.username,
@@ -152,6 +188,52 @@ export const getCurrentUser = createServerFn({ method: "GET" })
       displayName: user.displayName || user.username,
       imageUrl: user.imageUrl || "",
     };
+  });
+
+export const subscribeToNotifications = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      subscription: z.object({
+        endpoint: z.string(),
+        keys: z.object({
+          p256dh: z.string(),
+          auth: z.string(),
+        }),
+      }),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    const existing = await db
+      .select()
+      .from(notificationSubscriptions)
+      .where(eq(notificationSubscriptions.endpoint, data.subscription.endpoint))
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(notificationSubscriptions).values({
+        userId: user.userId,
+        endpoint: data.subscription.endpoint,
+        p256dh: data.subscription.keys.p256dh,
+        auth: data.subscription.keys.auth,
+      });
+    } else {
+      await db
+        .update(notificationSubscriptions)
+        .set({
+          userId: user.userId,
+          p256dh: data.subscription.keys.p256dh,
+          auth: data.subscription.keys.auth,
+          updatedAt: new Date(),
+        })
+        .where(eq(notificationSubscriptions.endpoint, data.subscription.endpoint));
+    }
+
+    return { success: true };
   });
 
 export const updateUserProfile = createServerFn({ method: "POST" })
@@ -205,8 +287,6 @@ export const register = createServerFn({ method: "POST" })
     password: z.string().min(6, "Password must be at least 6 characters"),
   }))
   .handler(async () => {
-    // Registration is disabled by design. Accounts are created directly in the
-    // database by an administrator; there is no self-service sign-up.
     throw new Error("Registration is disabled. Please contact an administrator to create an account.");
   });
 
@@ -216,7 +296,7 @@ export const getWorkItems = createServerFn({ method: "GET" })
     if (!user) {
       throw new Error("Unauthorized");
     }
-    
+
     return db
       .select()
       .from(workItems)
@@ -234,7 +314,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     googleDriveUrl: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
-    assignedTo: z.enum(['tom', 'chris']),
+    assignedTo: z.enum(["tom", "chris"]),
     measuredBy: z.string().optional(),
     carpetAndFlooringOrdered: z.boolean().optional(),
     upliftAndDisposal: z.boolean().optional(),
@@ -275,7 +355,9 @@ export const createWorkItem = createServerFn({ method: "POST" })
         what3words: data.what3words || "",
       })
       .returning();
-      
+
+    await notifyAllSubscribers("Work item added", `${data.customerName} has been added to the tracker.`);
+
     return newItem;
   });
 
@@ -291,7 +373,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     googleDriveUrl: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
     whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
-    assignedTo: z.enum(['tom', 'chris']),
+    assignedTo: z.enum(["tom", "chris"]),
     carpetAndFlooringOrdered: z.boolean().optional(),
     upliftAndDisposal: z.boolean().optional(),
     furniture: z.boolean().optional(),
@@ -328,11 +410,13 @@ export const updateWorkItem = createServerFn({ method: "POST" })
       })
       .where(eq(workItems.id, id))
       .returning();
-      
+
     if (!updatedItem) {
       throw new Error("Work item not found");
     }
-    
+
+    await notifyAllSubscribers("Work item updated", `${data.customerName} has been changed.`);
+
     return updatedItem;
   });
 
@@ -345,11 +429,21 @@ export const deleteWorkItem = createServerFn({ method: "POST" })
     if (!user) {
       throw new Error("Unauthorized");
     }
-    
+
+    const [itemToDelete] = await db
+      .select()
+      .from(workItems)
+      .where(eq(workItems.id, data.id))
+      .limit(1);
+
     await db
       .delete(workItems)
       .where(eq(workItems.id, data.id));
-      
+
+    if (itemToDelete) {
+      await notifyAllSubscribers("Work item removed", `${itemToDelete.customerName} was removed from the tracker.`);
+    }
+
     return { success: true };
   });
 
@@ -393,6 +487,8 @@ export const createCalendarEvent = createServerFn({ method: "POST" })
       })
       .returning();
 
+    await notifyAllSubscribers("Calendar update", `${data.title} has been added to the schedule.`);
+
     return newEvent;
   });
 
@@ -431,6 +527,8 @@ export const updateCalendarEvent = createServerFn({ method: "POST" })
       throw new Error("Calendar event not found");
     }
 
+    await notifyAllSubscribers("Calendar update", `${data.title} was updated.`);
+
     return updatedEvent;
   });
 
@@ -444,9 +542,19 @@ export const deleteCalendarEvent = createServerFn({ method: "POST" })
       throw new Error("Unauthorized");
     }
 
+    const [eventToDelete] = await db
+      .select()
+      .from(calendarEvents)
+      .where(eq(calendarEvents.id, data.id))
+      .limit(1);
+
     await db
       .delete(calendarEvents)
       .where(eq(calendarEvents.id, data.id));
+
+    if (eventToDelete) {
+      await notifyAllSubscribers("Calendar update", `${eventToDelete.title} was removed from the schedule.`);
+    }
 
     return { success: true };
   });
