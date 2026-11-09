@@ -1,4 +1,4 @@
-import webPush from 'web-push'
+import { generateVAPIDKeys, sendNotification } from 'web-push'
 import { eq } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { notificationSubscriptions, pushConfiguration } from '../../db/schema.js'
@@ -11,7 +11,7 @@ export async function getPushKeys() {
   if (publicKey && privateKey) return { publicKey, privateKey }
   const [existing] = await db.select().from(pushConfiguration).where(eq(pushConfiguration.id, 1))
   if (existing) return existing
-  const keys = webPush.generateVAPIDKeys()
+  const keys = generateVAPIDKeys()
   await db.insert(pushConfiguration).values({ id: 1, ...keys }).onConflictDoNothing()
   const [saved] = await db.select().from(pushConfiguration).where(eq(pushConfiguration.id, 1))
   return saved
@@ -20,7 +20,7 @@ export async function getPushKeys() {
 export async function sendPush(subscription: typeof notificationSubscriptions.$inferSelect, title: string, body: string, tag: string) {
   const keys = await getPushKeys()
   try {
-    await webPush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
+    await sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
       JSON.stringify({ title, body, tag, url: '/' }), {
         vapidDetails: { subject: 'https://tmflooring.netlify.app', ...keys },
         TTL: 3600, timeout: 5000,
