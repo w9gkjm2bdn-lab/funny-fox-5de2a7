@@ -1,13 +1,17 @@
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()))
+
 self.addEventListener('push', (event) => {
-  const payload = event.data?.json ? event.data.json() : null
+  let payload = null
+  try { payload = event.data ? event.data.json() : null } catch { /* Use fallback message. */ }
   const title = payload?.title || 'Work Tracker Update'
   const body = payload?.body || 'A change was made in the tracker.'
 
   const options = {
     body,
-    icon: '/favicon.png',
-    badge: '/favicon.png',
-    tag: 'work-tracker',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: payload?.tag || 'work-tracker',
     requireInteraction: true,
     data: payload || {},
   }

@@ -5,6 +5,10 @@ import '../styles.css'
 
 export const Route = createRootRoute({
   head: () => ({
+    links: [
+      { rel: 'manifest', href: '/manifest.webmanifest' },
+      { rel: 'icon', href: '/favicon.ico' },
+    ],
     meta: [
       {
         charSet: 'utf-8',

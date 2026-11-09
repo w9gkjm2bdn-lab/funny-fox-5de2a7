@@ -3,11 +3,10 @@ import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server
 import { z } from "zod";
 import { db } from "../../db/index.js";
 import { users, workItems, calendarEvents, notificationSubscriptions } from "../../db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+import { getPushKeys, notifyAllSubscribers, sendPush } from "./push.js";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -84,45 +83,6 @@ async function getAuthenticatedUser() {
   return decryptSession(sessionToken);
 }
 
-async function notifyAllSubscribers(title: string, body: string) {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    return;
-  }
-
-  const webPush = await import("web-push");
-  webPush.setVapidDetails(
-    "mailto:admin@worktracker.local",
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY,
-  );
-
-  const subscriptions = await db.select().from(notificationSubscriptions);
-
-  for (const subscription of subscriptions) {
-    try {
-      await webPush.sendNotification(
-        {
-          endpoint: subscription.endpoint,
-          keys: {
-            p256dh: subscription.p256dh,
-            auth: subscription.auth,
-          },
-        },
-        JSON.stringify({
-          title,
-          body,
-          tag: "work-tracker",
-        }),
-      );
-    } catch (error) {
-      console.warn("Failed to send push notification, deleting invalid subscription:", error);
-      await db
-        .delete(notificationSubscriptions)
-        .where(eq(notificationSubscriptions.endpoint, subscription.endpoint));
-    }
-  }
-}
-
 export const login = createServerFn({ method: "POST" })
   .inputValidator(z.object({
     username: z.string().min(1, "Username is required"),
@@ -192,10 +152,10 @@ export const subscribeToNotifications = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       subscription: z.object({
-        endpoint: z.string(),
+        endpoint: z.url().refine(value => value.startsWith("https://"), "HTTPS required"),
         keys: z.object({
-          p256dh: z.string(),
-          auth: z.string(),
+          p256dh: z.string().min(1),
+          auth: z.string().min(1),
         }),
       }),
     }),
@@ -206,30 +166,16 @@ export const subscribeToNotifications = createServerFn({ method: "POST" })
       throw new Error("Unauthorized");
     }
 
-    const existing = await db
-      .select()
-      .from(notificationSubscriptions)
-      .where(eq(notificationSubscriptions.endpoint, data.subscription.endpoint))
-      .limit(1);
-
-    if (existing.length === 0) {
-      await db.insert(notificationSubscriptions).values({
-        userId: user.userId,
-        endpoint: data.subscription.endpoint,
-        p256dh: data.subscription.keys.p256dh,
-        auth: data.subscription.keys.auth,
-      });
-    } else {
-      await db
-        .update(notificationSubscriptions)
-        .set({
-          userId: user.userId,
-          p256dh: data.subscription.keys.p256dh,
-          auth: data.subscription.keys.auth,
-          updatedAt: new Date(),
-        })
-        .where(eq(notificationSubscriptions.endpoint, data.subscription.endpoint));
-    }
+    const values = {
+      userId: user.userId,
+      endpoint: data.subscription.endpoint,
+      p256dh: data.subscription.keys.p256dh,
+      auth: data.subscription.keys.auth,
+    };
+    await db.insert(notificationSubscriptions).values(values).onConflictDoUpdate({
+      target: notificationSubscriptions.endpoint,
+      set: { ...values, updatedAt: new Date() },
+    });
 
     return { success: true };
   });
@@ -554,5 +500,29 @@ export const deleteCalendarEvent = createServerFn({ method: "POST" })
       await notifyAllSubscribers("Calendar update", `${eventToDelete.title} was removed from the schedule.`);
     }
 
+    return { success: true };
+  });
+
+export const getNotificationKey = createServerFn({ method: "GET" }).handler(async () => {
+  if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
+  return { publicKey: (await getPushKeys()).publicKey };
+});
+
+export const unsubscribeFromNotifications = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ endpoint: z.string() }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) throw new Error("Unauthorized");
+    await db.delete(notificationSubscriptions).where(and(eq(notificationSubscriptions.userId, user.userId), eq(notificationSubscriptions.endpoint, data.endpoint)));
+    return { success: true };
+  });
+
+export const testNotification = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ endpoint: z.string() }))
+  .handler(async ({ data }) => {
+    const user = await getAuthenticatedUser();
+    if (!user) throw new Error("Unauthorized");
+    const [subscription] = await db.select().from(notificationSubscriptions).where(and(eq(notificationSubscriptions.userId, user.userId), eq(notificationSubscriptions.endpoint, data.endpoint)));
+    if (!subscription || !await sendPush(subscription, "Notifications are ready", "You’ll receive job changes and install and measuring reminders on this device.", "test")) throw new Error("Unable to send test notification. Try enabling notifications again.");
     return { success: true };
   });
