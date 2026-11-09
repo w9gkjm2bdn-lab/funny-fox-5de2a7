@@ -56,3 +56,15 @@ export const calendarEvents = pgTable("calendar_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Stable application-server keys; private key is only read by server code.
+export const pushConfiguration = pgTable("push_configuration", {
+  id: integer("id").primaryKey(),
+  publicKey: text("public_key").notNull(),
+  privateKey: text("private_key").notNull(),
+});
+
+export const notificationDeliveries = pgTable("notification_deliveries", {
+  key: text("key").primaryKey(),
+  claimedAt: timestamp("claimed_at").defaultNow().notNull(),
+});

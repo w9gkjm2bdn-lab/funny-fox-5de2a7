@@ -36,8 +36,10 @@ import {
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
+  unsubscribeFromNotifications,
 } from '../server/tracker.functions'
 import WorkCalendarModal, { CalendarEventItem } from '../components/WorkCalendar'
+import NotificationSettings from '../components/NotificationSettings'
 import AddToCalendarButton from '../components/AddToCalendarButton'
 import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
 
@@ -332,6 +334,14 @@ function TrackerApp() {
   // Handle Logout
   const handleLogout = async () => {
     try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration('/sw.js')
+        const subscription = await registration?.pushManager.getSubscription()
+        if (subscription) {
+          await unsubscribeFromNotifications({ data: { endpoint: subscription.endpoint } })
+          await subscription.unsubscribe()
+        }
+      }
       await logout()
       setUser(null)
       setWorkItemsList([])
@@ -737,6 +747,7 @@ function TrackerApp() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-8">
+        <NotificationSettings />
         {/* KPI Dashboard Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between">
