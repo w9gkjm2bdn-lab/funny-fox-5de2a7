@@ -5,18 +5,9 @@ import { db } from "../../db/index.js";
 import { users, workItems, calendarEvents, notificationSubscriptions } from "../../db/schema.js";
 import { eq, desc } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
-import * as webPush from "web-push";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webPush.setVapidDetails(
-    "mailto:admin@worktracker.local",
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY,
-  );
-}
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -97,6 +88,13 @@ async function notifyAllSubscribers(title: string, body: string) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     return;
   }
+
+  const webPush = await import("web-push");
+  webPush.setVapidDetails(
+    "mailto:admin@worktracker.local",
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY,
+  );
 
   const subscriptions = await db.select().from(notificationSubscriptions);
 
