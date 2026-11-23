@@ -60,6 +60,7 @@ interface WorkItem {
   samples?: string | null
   upliftAndDisposal?: boolean
   furniture?: boolean
+  customerContacted?: boolean
   carpetOrderedDate?: string | null
   carpetCostPerSqm?: string | null
   measuredBy?: string | null
@@ -107,6 +108,7 @@ function TrackerApp() {
   const [editingDriveUrl, setEditingDriveUrl] = useState(false)
   const [upliftAndDisposal, setUpliftAndDisposal] = useState(false)
   const [furniture, setFurniture] = useState(false)
+  const [customerContacted, setCustomerContacted] = useState(false)
   const [assignedTo, setAssignedTo] = useState<'tom' | 'chris'>('tom')
   const [carpetOrderedDate, setCarpetOrderedDate] = useState('')
   const [carpetCostPerSqm, setCarpetCostPerSqm] = useState('')
@@ -405,6 +407,7 @@ function TrackerApp() {
     setEditingDriveUrl(false)
     setUpliftAndDisposal(false)
     setFurniture(false)
+    setCustomerContacted(false)
     setAssignedTo('tom')
     setCarpetOrderedDate('')
     setCarpetCostPerSqm('')
@@ -432,6 +435,7 @@ function TrackerApp() {
     setEditingDriveUrl(false)
     setUpliftAndDisposal(Boolean(item.upliftAndDisposal))
     setFurniture(Boolean(item.furniture))
+    setCustomerContacted(Boolean(item.customerContacted))
     setAssignedTo((item as any).assignedTo || 'tom')
     setCarpetOrderedDate((item as any).carpetOrderedDate || '')
     setCarpetCostPerSqm((item as any).carpetCostPerSqm || '')
@@ -493,6 +497,7 @@ function TrackerApp() {
             googleDriveUrl,
             upliftAndDisposal,
             furniture,
+            customerContacted,
             measuredBy,
             measuredBooked,
             fittingDate,
@@ -517,6 +522,7 @@ function TrackerApp() {
             googleDriveUrl,
             upliftAndDisposal,
             furniture,
+            customerContacted,
             measuredBy,
             measuredBooked,
             fittingDate,
@@ -1199,6 +1205,18 @@ function TrackerApp() {
                   />
                   Furniture
                 </label>
+                <label className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-300 cursor-pointer hover:border-emerald-500/40 transition-all md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={customerContacted}
+                    onChange={(e) => setCustomerContacted(e.target.checked)}
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                  <span>
+                    Customer contacted before fitting
+                    <span className="block text-xs font-normal text-slate-500">Stops the check-in reminder. Clears itself if the fitting date changes.</span>
+                  </span>
+                </label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
@@ -1564,7 +1582,7 @@ function TrackerApp() {
                         </div>
                       )}
 
-                      {(item.upliftAndDisposal || item.furniture) && (
+                      {(item.upliftAndDisposal || item.furniture || item.customerContacted) && (
                         <div className="flex flex-wrap gap-2">
                           {item.upliftAndDisposal && (
                             <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
@@ -1574,6 +1592,11 @@ function TrackerApp() {
                           {item.furniture && (
                             <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-300">
                               Furniture
+                            </span>
+                          )}
+                          {item.customerContacted && (
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                              ✓ Customer contacted
                             </span>
                           )}
                         </div>

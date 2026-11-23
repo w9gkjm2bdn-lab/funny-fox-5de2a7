@@ -3,11 +3,15 @@
 import type { Config } from '@netlify/functions'
 import { db } from '../../db/index.js'
 import { workItems, calendarEvents } from '../../db/schema.js'
+import { isValidFeedToken } from '../../src/server/feed-token.js'
 import { generateICSFeed, ICSEventItem, parseDateTimeString, formatDateTimeDisplay } from '../../src/utils/ics.js'
 
 export default async (req: Request) => {
   try {
     const url = new URL(req.url)
+    if (!await isValidFeedToken(url.searchParams.get('key'))) {
+      return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain' } })
+    }
     const assignee = url.searchParams.get('assignee')?.toLowerCase() // optional filter e.g. 'tom', 'chris'
 
     // Fetch all active work items and calendar entries

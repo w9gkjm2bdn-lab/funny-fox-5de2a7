@@ -7,6 +7,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
 
 import { getPushKeys, notifyAllSubscribers, sendPush } from "./push.js";
+import { calendarFeedToken } from "./feed-token.js";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -263,6 +264,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     carpetAndFlooringOrdered: z.boolean().optional(),
     upliftAndDisposal: z.boolean().optional(),
     furniture: z.boolean().optional(),
+    customerContacted: z.boolean().optional(),
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
     carpetOrderedDate: z.string().optional(),
@@ -292,6 +294,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         carpetAndFlooringOrdered: data.carpetAndFlooringOrdered || false,
         upliftAndDisposal: data.upliftAndDisposal || false,
         furniture: data.furniture || false,
+        customerContacted: data.customerContacted || false,
         measuredBooked: data.measuredBooked || "",
         fittingDate: data.fittingDate || "",
         carpetOrderedDate: data.carpetOrderedDate || "",
@@ -321,6 +324,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     carpetAndFlooringOrdered: z.boolean().optional(),
     upliftAndDisposal: z.boolean().optional(),
     furniture: z.boolean().optional(),
+    customerContacted: z.boolean().optional(),
     measuredBy: z.string().optional(),
     measuredBooked: z.string().optional(),
     fittingDate: z.string().optional(),
@@ -336,10 +340,18 @@ export const updateWorkItem = createServerFn({ method: "POST" })
 
     const { id, ...values } = data;
 
+    // A new fitting date means a new check-in is due, unless the box was ticked in this same save.
+    const [existing] = await db.select().from(workItems).where(eq(workItems.id, id));
+    let customerContacted = values.customerContacted ?? existing?.customerContacted ?? false;
+    if (existing && (existing.fittingDate || "") !== (values.fittingDate || "") && existing.customerContacted && customerContacted) {
+      customerContacted = false;
+    }
+
     const [updatedItem] = await db
       .update(workItems)
       .set({
         ...values,
+        customerContacted,
         customerPhone: (values as any).customerPhone || "",
         notes: values.notes || "",
         samples: (values as any).samples || "",
@@ -526,3 +538,9 @@ export const testNotification = createServerFn({ method: "POST" })
     if (!subscription || !await sendPush(subscription, "Notifications are ready", "You’ll receive job changes and install and measuring reminders on this device.", "test")) throw new Error("Unable to send test notification. Try enabling notifications again.");
     return { success: true };
   });
+
+// Only signed-in users can see the secret calendar feed key.
+export const getCalendarFeedKey = createServerFn({ method: "GET" }).handler(async () => {
+  if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
+  return { key: await calendarFeedToken() };
+});
