@@ -19,6 +19,8 @@ import {
   Archive,
   X,
   Phone,
+  MessageCircle,
+  MessageSquare,
   FolderOpen,
   Calendar as CalendarIcon,
   ExternalLink,
@@ -37,11 +39,13 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
   unsubscribeFromNotifications,
+  markCustomerContacted,
 } from '../server/tracker.functions'
 import WorkCalendarModal, { CalendarEventItem } from '../components/WorkCalendar'
 import NotificationSettings from '../components/NotificationSettings'
 import AddToCalendarButton from '../components/AddToCalendarButton'
 import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
+import { nextFittingDate, fittingMessage, whatsappHref, smsHref } from '../utils/customer-message'
 
 export const Route = createFileRoute('/')({
   component: TrackerApp,
@@ -572,6 +576,17 @@ function TrackerApp() {
   const getDialHref = (phone: string) => {
     const dialable = phone.replace(/[^\d+]/g, '')
     return dialable ? `tel:${dialable}` : '#'
+  }
+
+  const localToday = () => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+
+  // Tapping a message button counts as checking in, so tomorrow's reminder doesn't nag.
+  const onMessagedCustomer = (item: WorkItem) => {
+    if (item.customerContacted) return
+    markCustomerContacted({ data: { id: item.id } }).then(() => fetchWorkItems()).catch(() => {})
   }
 
   const getWhat3WordsHref = (w3w: string) => {
@@ -1521,6 +1536,35 @@ function TrackerApp() {
                               <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
                               <span>{item.customerPhone}</span>
                             </a>
+                            {(() => {
+                              const fitting = nextFittingDate(item.fittingDate, localToday())
+                              if (!fitting || !item.customerPhone) return null
+                              const message = fittingMessage(item.customerName, fitting)
+                              return (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  <a
+                                    href={whatsappHref(item.customerPhone, message)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={() => onMessagedCustomer(item)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-xs font-semibold transition-all"
+                                    title="WhatsApp the customer to confirm their fitting"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    WhatsApp
+                                  </a>
+                                  <a
+                                    href={smsHref(item.customerPhone, message)}
+                                    onClick={() => onMessagedCustomer(item)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/25 text-sky-300 text-xs font-semibold transition-all"
+                                    title="Text the customer to confirm their fitting"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    Text
+                                  </a>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )}
                         {item.googleDriveUrl && (

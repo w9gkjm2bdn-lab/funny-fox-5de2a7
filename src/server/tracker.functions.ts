@@ -544,3 +544,12 @@ export const getCalendarFeedKey = createServerFn({ method: "GET" }).handler(asyn
   if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
   return { key: await calendarFeedToken() };
 });
+
+// Set when a customer is messaged from the job card, so the check-in reminder stops.
+export const markCustomerContacted = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ id: z.number() }))
+  .handler(async ({ data }) => {
+    if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
+    await db.update(workItems).set({ customerContacted: true, updatedAt: new Date() }).where(eq(workItems.id, data.id));
+    return { success: true };
+  });
