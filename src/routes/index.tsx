@@ -158,6 +158,15 @@ function TrackerApp() {
   const [calFormError, setCalFormError] = useState<string | null>(null)
   const [calFormSubmitting, setCalFormSubmitting] = useState(false)
 
+  // Stop the job list scrolling behind an open form.
+  const modalOpen = formMode !== 'none' || calendarModalMode !== 'none'
+  useEffect(() => {
+    if (!modalOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
+  }, [modalOpen])
+
   useEffect(() => {
     if (formMode === 'none') {
       return
@@ -830,7 +839,7 @@ function TrackerApp() {
               <p className="text-3xl font-extrabold text-white mt-1">{progressJobs}</p>
             </div>
             <div className="p-3 bg-sky-500/10 rounded-xl text-sky-400 border border-sky-500/20">
-              <Filter className="w-5 h-5" />
+              <Hammer className="w-5 h-5" />
             </div>
           </div>
 
@@ -1005,7 +1014,7 @@ function TrackerApp() {
         {/* Dynamic Modal for Add & Edit */}
         {formMode !== 'none' && (
           <div
-            className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto px-3 py-4 sm:px-6 sm:py-8"
+            className="fixed inset-x-0 top-0 h-lvh z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto overscroll-contain px-3 pt-4 pb-24 sm:px-6 sm:py-8"
             role="dialog"
             aria-modal="true"
             aria-labelledby="work-item-form-title"
@@ -1439,15 +1448,15 @@ function TrackerApp() {
           <button
             type="button"
             onClick={() => setView('active')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               view === 'active'
                 ? 'border-emerald-500 text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Briefcase className="w-4 h-4 shrink-0" />
-            <span>Active Jobs</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+            <Briefcase className="w-4 h-4 shrink-0 hidden sm:block" />
+            <span><span className="hidden sm:inline">Active Jobs</span><span className="sm:hidden">Active</span></span>
+            <span className="sm:ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
               {activeItems.length}
             </span>
           </button>
@@ -1455,15 +1464,15 @@ function TrackerApp() {
           <button
             type="button"
             onClick={() => setView('calendar')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               view === 'calendar'
                 ? 'border-emerald-500 text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <CalendarIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+            <CalendarIcon className="w-4 h-4 shrink-0 hidden sm:block text-emerald-400" />
             <span>Schedule</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="sm:ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               {workItemsList.filter((i) => i.measuredBooked || i.fittingDate).length + calendarEventsList.length}
             </span>
           </button>
@@ -1471,15 +1480,15 @@ function TrackerApp() {
           <button
             type="button"
             onClick={() => setView('archive')}
-            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex flex-1 sm:flex-none justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               view === 'archive'
                 ? 'border-emerald-500 text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Archive className="w-4 h-4 shrink-0" />
+            <Archive className="w-4 h-4 shrink-0 hidden sm:block" />
             <span>Archive</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+            <span className="sm:ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
               {archivedItems.length}
             </span>
           </button>
@@ -1540,15 +1549,21 @@ function TrackerApp() {
                 >
                   <div className="p-6 space-y-4">
                     {/* Customer & Location */}
-                    <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-3">
-                      <div className="space-y-1.5 flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-xl tracking-tight">
-                          {item.customerName}
-                        </h4>
+                    <div className="border-b border-slate-800/80 pb-3">
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <h4 className="font-bold text-white text-xl tracking-tight min-w-0 break-words">
+                            {item.customerName}
+                          </h4>
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold shrink-0 whitespace-nowrap ${statusBadgeClass}`}>
+                            {item.status}
+                          </span>
+                        </div>
                         {upcoming && (
-                          <p className={`flex items-center gap-1.5 text-base font-bold ${upcoming.kind === 'Measure' ? 'text-sky-300' : 'text-violet-300'}`}>
+                          <p className={`flex flex-wrap items-center gap-x-1.5 text-base font-bold ${upcoming.kind === 'Measure' ? 'text-sky-300' : 'text-violet-300'}`}>
                             {upcoming.kind === 'Measure' ? <Ruler className="w-4 h-4 shrink-0" /> : <Hammer className="w-4 h-4 shrink-0" />}
-                            {upcoming.kind} {formatAppointmentDate(upcoming.value, localToday())}
+                            <span>{upcoming.kind}</span>
+                            <span className="whitespace-nowrap">{formatAppointmentDate(upcoming.value, localToday())}</span>
                           </p>
                         )}
 
@@ -1558,12 +1573,12 @@ function TrackerApp() {
                             href={`https://maps.google.com/?q=${encodeURIComponent(item.site)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 text-sm font-semibold transition-all shadow-sm group/site max-w-full"
+                            className="inline-flex items-start gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 text-sm font-semibold transition-all shadow-sm group/site max-w-full"
                             title="Open address in Maps"
                           >
-                            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover/site:scale-110 transition-transform" />
-                            <span className="truncate">{item.site}</span>
-                            <ExternalLink className="w-3 h-3 text-emerald-400/70 group-hover/site:text-emerald-300 shrink-0 ml-0.5" />
+                            <MapPin className="w-3.5 h-3.5 mt-[0.2rem] text-emerald-400 shrink-0 group-hover/site:scale-110 transition-transform" />
+                            <span className="min-w-0 break-words">{item.site}</span>
+                            <ExternalLink className="w-3 h-3 mt-1 text-emerald-400/70 group-hover/site:text-emerald-300 shrink-0 ml-0.5" />
                           </a>
                         </div>
 
@@ -1640,13 +1655,10 @@ function TrackerApp() {
                         {item.assignedTo && (
                           <div className="flex items-center gap-1.5 text-xs text-slate-400">
                             <Briefcase className="w-3.5 h-3.5 text-violet-400/80" />
-                            <span className="capitalize">Assigned to {item.assignedTo}</span>
+                            <span>Assigned to <span className="capitalize">{item.assignedTo}</span></span>
                           </div>
                         )}
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold shrink-0 ${statusBadgeClass}`}>
-                        {item.status}
-                      </span>
                     </div>
 
                     <button
@@ -1783,8 +1795,8 @@ function TrackerApp() {
 
                   {/* Actions & Timestamps Footer */}
                   <div className="px-5 py-4 bg-slate-950/80 border-t border-slate-800/50 flex items-center justify-between gap-3 text-sm text-slate-500 mt-auto">
-                    <span title={`Updated: ${new Date(item.updatedAt).toLocaleString()}`}>
-                      Updated {new Date(item.updatedAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
+                    <span className="whitespace-nowrap" title={`Updated: ${new Date(item.updatedAt).toLocaleString()}`}>
+                      <span className="hidden sm:inline">Updated </span>{new Date(item.updatedAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -1792,7 +1804,7 @@ function TrackerApp() {
                         <button
                           onClick={() => advanceStage(item)}
                           disabled={advancingId === item.id}
-                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-sm font-semibold whitespace-nowrap transition-all cursor-pointer disabled:opacity-50"
                           title={`Move this job to ${nextStage(item.status)}`}
                         >
                           {advancingId === item.id ? 'Saving…' : nextStage(item.status)}
@@ -1817,7 +1829,7 @@ function TrackerApp() {
 
         {/* Manual Calendar Event Add/Edit Modal */}
         {calendarModalMode !== 'none' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="fixed inset-x-0 top-0 h-lvh z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overscroll-contain animate-fade-in">
             <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">
               <div className="px-6 py-4 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">

@@ -685,7 +685,7 @@ export default function WorkCalendarModal({
 
       {/* Shared Calendar Sync Modal */}
       {showSyncModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-x-0 top-0 h-lvh z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overscroll-contain animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
