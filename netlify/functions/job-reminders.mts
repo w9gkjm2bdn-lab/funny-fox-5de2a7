@@ -2,7 +2,7 @@ import { eq, lt } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { workItems, calendarEvents, notificationSubscriptions, notificationDeliveries } from '../../db/schema.js'
 import { sendPush } from '../../src/server/push.js'
-import { reminderWindow, scheduledDates } from '../../src/server/reminder-time.js'
+import { reminderWindow, scheduledDates, checkInDates } from '../../src/server/reminder-time.js'
 
 export default async () => {
   const now = new Date()
@@ -19,10 +19,26 @@ export default async () => {
         body: `${name}${site ? ` — ${site}` : ''}. ${date.replace('T', ' at ')}.` })
     }
   }
+  // Morning only: remind the team to check in with the customer a few days before fitting.
+  const checkInTargets = window.kind === 'today' ? checkInDates(window.date) : []
+  const formatDay = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+  })
   for (const job of jobs) {
     if (job.status === 'Completed') continue
     add(`job-${job.id}-fitting`, job.customerName, 'Install', job.fittingDate, job.site)
     add(`job-${job.id}-measure`, job.customerName, 'Measuring', job.measuredBooked, job.site)
+    for (const date of scheduledDates(job.fittingDate)) {
+      if (!checkInTargets.includes(date.slice(0, 10))) continue
+      const time = date.length > 10 ? ` at ${date.slice(11, 16)}` : ''
+      reminders.push({
+        // Keyed on the fitting date (not today) so the day-3 fallback doesn't repeat it.
+        key: `job-${job.id}-checkin:${date}`,
+        title: 'Check in with customer',
+        body: `${job.customerName}${job.site ? ` — ${job.site}` : ''}. Fitting ${formatDay(date)}${time}.` +
+          `${job.customerPhone ? ` Call ${job.customerPhone}.` : ''}`,
+      })
+    }
   }
   for (const event of events) {
     if (['fitting', 'measure', 'delivery'].includes(event.eventType)) {

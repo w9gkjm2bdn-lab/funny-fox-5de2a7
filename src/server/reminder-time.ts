@@ -13,6 +13,21 @@ export function reminderWindow(now: Date) {
   return { date: target.toISOString().slice(0, 10), kind: hour === 18 ? 'tomorrow' : 'today' }
 }
 
+// Adds whole days to a YYYY-MM-DD calendar date, independent of time zone.
+export function addDays(date: string, days: number) {
+  const d = new Date(`${date}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+// Customer check-ins go out in the morning run 4 days before a fitting. Day 3 is
+// a fallback for fittings booked late; delivery keys stop it being sent twice.
+export const CHECK_IN_DAYS_BEFORE = [4, 3]
+
+export function checkInDates(today: string) {
+  return CHECK_IN_DAYS_BEFORE.map(days => addDays(today, days))
+}
+
 export function scheduledDates(value: string | null) {
   return (value || '').split(',').map(s => s.trim()).filter(s => /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/.test(s))
 }
