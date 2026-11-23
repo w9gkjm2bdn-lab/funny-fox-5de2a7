@@ -12,7 +12,7 @@ A secure, fully persistent, and multi-device Work Tracker web application design
   - Where Needs Measuring
   - Additional Notes
 - **Multi-Device Syncing:** Hosted on Netlify with database storage, keeping information completely synced across mobile phones, tablets, and desktop computers.
-- **Team Authentication:** Features robust, custom session-based user authentication. Out-of-the-box support for two pre-seeded user accounts, plus open registration for additional teammates.
+- **Team Authentication:** Features robust, custom session-based user authentication. Two admin accounts are seeded on a new database (starting password from the `DEFAULT_ADMIN_PASSWORD` env var); self-registration is disabled.
 - **Responsive Dashboard:** Includes visual KPI status counts, text-based search, status filters, and interactive modals for creating and updating work items.
 
 ## Technologies Used

@@ -104,7 +104,7 @@ export default async (req: Request) => {
     })
   } catch (err: any) {
     console.error('Calendar feed error:', err)
-    return new Response(`Error generating calendar feed: ${err?.message}`, {
+    return new Response('Error generating calendar feed', {
       status: 500,
       headers: { 'Content-Type': 'text/plain' },
     })
