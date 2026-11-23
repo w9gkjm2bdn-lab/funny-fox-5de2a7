@@ -13,3 +13,60 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
 }
+
+/* ---- Easier-on-the-eye tweaks -------------------------------------------
+   The app is built with dark slate colours. Rather than rewrite every
+   component, these override Tailwind's colour variables:
+   - dark mode: lift the dim grey text so it's readable in daylight
+   - light mode: follows the phone's setting; swaps the slate scale and
+     darkens the accent text colours so they stay readable on white. */
+
+:root {
+  color-scheme: dark;
+  --color-slate-500: oklch(70.4% 0.04 256.788);
+  --color-slate-400: oklch(80% 0.03 254);
+}
+
+/* Slightly larger text on phones (everything is sized in rem). */
+@media (max-width: 768px) {
+  html { font-size: 17px; }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-slate-950: oklch(98.4% 0.003 247.858);
+    --color-slate-900: oklch(100% 0 0);
+    --color-slate-800: oklch(92.9% 0.013 255.508);
+    --color-slate-700: oklch(86.9% 0.022 252.894);
+    --color-slate-600: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(50% 0.045 257.3);
+    --color-slate-400: oklch(44.6% 0.043 257.281);
+    --color-slate-300: oklch(33% 0.044 257.287);
+    --color-slate-200: oklch(27.9% 0.041 260.031);
+    --color-slate-100: oklch(20.8% 0.042 265.755);
+    --color-slate-50: oklch(12.9% 0.042 264.695);
+    --color-white: oklch(20.8% 0.042 265.755);
+
+    --color-emerald-200: oklch(43.2% 0.095 166.913);
+    --color-emerald-300: oklch(50.8% 0.118 165.612);
+    --color-emerald-400: oklch(59.6% 0.145 163.225);
+    --color-sky-200: oklch(44.3% 0.11 240.79);
+    --color-sky-300: oklch(50% 0.134 242.749);
+    --color-sky-400: oklch(58.8% 0.158 241.966);
+    --color-amber-300: oklch(55.5% 0.163 48.998);
+    --color-amber-400: oklch(66.6% 0.179 58.318);
+    --color-violet-300: oklch(49.1% 0.27 292.581);
+    --color-violet-400: oklch(54.1% 0.281 293.009);
+    --color-orange-300: oklch(55.3% 0.195 38.402);
+    --color-orange-400: oklch(64.6% 0.222 41.116);
+    --color-rose-200: oklch(45.5% 0.188 13.697);
+    --color-rose-300: oklch(51.4% 0.222 16.935);
+    --color-rose-400: oklch(58.6% 0.253 17.585);
+    --color-red-300: oklch(50.5% 0.213 27.518);
+    --color-red-400: oklch(57.7% 0.245 27.325);
+    --color-blue-400: oklch(54.6% 0.245 262.881);
+  }
+  /* Buttons with a solid colour keep white text in both themes. */
+  .bg-emerald-500, .bg-emerald-600, .bg-red-500, .bg-sky-500, .bg-violet-500, .bg-amber-500 { --color-white: oklch(100% 0 0); }
+}

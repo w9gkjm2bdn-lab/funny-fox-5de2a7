@@ -504,7 +504,7 @@ export default function WorkCalendarModal({
                     </span>
 
                     {dayEvents.length > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                      <span className="text-xs font-bold px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
                         {dayEvents.length}
                       </span>
                     )}
@@ -515,7 +515,7 @@ export default function WorkCalendarModal({
                     {dayEvents.slice(0, 2).map((ev) => (
                       <div
                         key={ev.uniqueKey}
-                        className={`text-[10px] leading-tight font-medium px-1.5 py-0.5 rounded truncate border ${ev.badgeBg} ${ev.badgeText} ${ev.borderColor}`}
+                        className={`text-xs leading-tight font-medium px-1.5 py-0.5 rounded truncate border ${ev.badgeBg} ${ev.badgeText} ${ev.borderColor}`}
                         title={`${ev.title} ${ev.timeStr ? `at ${ev.timeStr}` : ''} ${ev.subtitle ? `(${ev.subtitle})` : ''}`}
                       >
                         {ev.timeStr ? `${ev.timeStr} ` : ''}{ev.title}
@@ -593,7 +593,7 @@ export default function WorkCalendarModal({
                               <span>{formatDateTimeDisplay(ev.rawDateStr, 1).split('•')[1]?.trim() || `${ev.timeStr} (1 hr)`}</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 pl-4">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-400 pl-4">
                               <Clock className="w-3 h-3 shrink-0" />
                               <span>All-day slot (1 hr default)</span>
                             </div>
@@ -604,7 +604,7 @@ export default function WorkCalendarModal({
                           )}
 
                           {ev.assignedTo && (
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400 pl-4">
+                            <div className="flex items-center gap-1 text-xs text-slate-400 pl-4">
                               <User className="w-3 h-3 text-slate-400" />
                               <span className="capitalize">{ev.assignedTo}</span>
                             </div>
@@ -662,7 +662,7 @@ export default function WorkCalendarModal({
           </div>
 
           {/* Quick Legend Footer */}
-          <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+          <div className="pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs text-slate-400">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span>Job Measure Date</span>
@@ -717,7 +717,7 @@ export default function WorkCalendarModal({
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                     Option 1: iPhone / Apple Calendar
                   </h4>
-                  <p className="text-[11px] text-slate-400">Tap below to auto-subscribe in Apple Calendar</p>
+                  <p className="text-xs text-slate-400">Tap below to auto-subscribe in Apple Calendar</p>
                 </div>
                 <a
                   href={feedUrl ? webcalUrl : undefined}
@@ -734,7 +734,7 @@ export default function WorkCalendarModal({
                 <span className="w-2 h-2 rounded-full bg-blue-400" />
                 Option 2: Google Calendar (Android / Web)
               </h4>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed">
                 1. Copy the subscription link below.<br />
                 2. In Google Calendar on desktop or mobile, go to <em>Other calendars (+) &rarr; From URL</em> and paste it.
               </p>
@@ -757,7 +757,7 @@ export default function WorkCalendarModal({
               </div>
             </div>
 
-            <p className="text-[11px] text-amber-300/80 leading-relaxed">
+            <p className="text-xs text-amber-300/80 leading-relaxed">
               This link is private — it shows customer details to anyone who has it. Only add it to your own devices.
             </p>
 
