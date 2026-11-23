@@ -133,4 +133,5 @@ The following environment variable should be configured in your Netlify deployme
 - **Environment Variables:** Sensitive values like `SESSION_SECRET` must be stored in Netlify environment settings, never in version control.
 - **Admin Flag:** Use the `isAdmin` column to gate administrative functionality on both frontend and backend.
 - **Password Hashing:** All passwords are hashed using scrypt with random salt. Never store or transmit plaintext passwords.
+- **Login Rate Limiting:** Failed sign-ins are recorded in `login_failures`. 5 failures for a username, or 20 from one IP (`x-nf-client-connection-ip`), within 15 minutes block further attempts until the oldest ages out. Limits live in `src/server/login-limit.ts`.
 - **Session Expiration:** Session tokens expire after 30 days and are verified with AES-GCM authentication.

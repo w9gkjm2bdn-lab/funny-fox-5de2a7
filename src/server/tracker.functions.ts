@@ -1,14 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
+import { getCookie, setCookie, deleteCookie, getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { db } from "../../db/index.js";
-import { users, workItems, calendarEvents, notificationSubscriptions } from "../../db/schema.js";
-import { eq, desc, and } from "drizzle-orm";
+import { users, workItems, calendarEvents, notificationSubscriptions, loginFailures } from "../../db/schema.js";
+import { eq, desc, and, gt, lt, type SQL } from "drizzle-orm";
 import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv, createHash, createHmac } from "crypto";
 
 import { getPushKeys, notifyAllSubscribers, sendPush } from "./push.js";
 import { calendarFeedToken } from "./feed-token.js";
 import { JOB_STAGES } from "../utils/job-stages.js";
+import { LOGIN_WINDOW_MS, MAX_FAILURES_PER_USERNAME, MAX_FAILURES_PER_IP, lockoutRemainingMs, lockoutMessage } from "./login-limit.js";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -112,6 +113,17 @@ async function getAuthenticatedUser() {
   return decryptSession(sessionToken);
 }
 
+// Netlify passes the real client address in this header.
+function clientIp() {
+  return getRequestHeader("x-nf-client-connection-ip") || getRequestIP({ xForwardedFor: true }) || "unknown";
+}
+
+async function recentFailures(where: SQL | undefined, max: number) {
+  const rows = await db.select({ createdAt: loginFailures.createdAt }).from(loginFailures)
+    .where(where).orderBy(desc(loginFailures.createdAt)).limit(max);
+  return rows.map(row => row.createdAt);
+}
+
 export const login = createServerFn({ method: "POST" })
   .inputValidator(z.object({
     username: z.string().min(1, "Username is required"),
@@ -120,15 +132,35 @@ export const login = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await ensureDefaultUsers();
 
+    const username = data.username.trim().toLowerCase();
+    const ip = clientIp();
+    const now = Date.now();
+    const since = new Date(now - LOGIN_WINDOW_MS);
+
+    // Checked before the password so a locked account can't be guessed at all.
+    const [byUsername, byIp] = await Promise.all([
+      recentFailures(and(eq(loginFailures.username, username), gt(loginFailures.createdAt, since)), MAX_FAILURES_PER_USERNAME),
+      recentFailures(and(eq(loginFailures.ip, ip), gt(loginFailures.createdAt, since)), MAX_FAILURES_PER_IP),
+    ]);
+    const waitMs = Math.max(
+      lockoutRemainingMs(byUsername, MAX_FAILURES_PER_USERNAME, now),
+      lockoutRemainingMs(byIp, MAX_FAILURES_PER_IP, now),
+    );
+    if (waitMs > 0) throw new Error(lockoutMessage(waitMs));
+
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.username, data.username.toLowerCase()))
+      .where(eq(users.username, username))
       .limit(1);
 
     if (!user || !verifyPassword(data.password, user.passwordHash)) {
+      await db.insert(loginFailures).values({ username, ip });
+      await db.delete(loginFailures).where(lt(loginFailures.createdAt, new Date(now - 24 * 60 * 60 * 1000)));
       throw new Error("Invalid username or password");
     }
+
+    await db.delete(loginFailures).where(eq(loginFailures.username, username));
 
     const token = await encryptSession(user.id, user.username, user.isAdmin);
 
