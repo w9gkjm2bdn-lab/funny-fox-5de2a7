@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { reminderWindow, scheduledDates } from '../src/server/reminder-time.ts'
+import { reminderWindow, scheduledDates, checkInDates } from '../src/server/reminder-time.ts'
+
+test('customer check-ins target fittings 4 days out, with a 3-day fallback', () => {
+  assert.deepEqual(checkInDates('2026-11-23'), ['2026-11-27', '2026-11-26'])
+  assert.deepEqual(checkInDates('2026-12-29'), ['2027-01-02', '2027-01-01'])
+  assert.deepEqual(checkInDates('2026-02-26'), ['2026-03-02', '2026-03-01'])
+})
 
 test('winter reminders use UK local time', () => {
   assert.deepEqual(reminderWindow(new Date('2026-11-09T18:20:00Z')), { date: '2026-11-10', kind: 'tomorrow' })
