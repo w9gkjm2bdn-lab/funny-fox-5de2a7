@@ -25,6 +25,9 @@ import {
   Calendar as CalendarIcon,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
+  Ruler,
+  Hammer,
 } from 'lucide-react'
 import {
   login,
@@ -47,7 +50,8 @@ import WorkCalendarModal, { CalendarEventItem } from '../components/WorkCalendar
 import NotificationSettings from '../components/NotificationSettings'
 import AddToCalendarButton from '../components/AddToCalendarButton'
 import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
-import { nextStage } from '../utils/job-stages'
+import { nextStage, stageStyle } from '../utils/job-stages'
+import { nextAppointment, formatAppointmentDate } from '../utils/next-appointment'
 import { nextFittingDate, fittingMessage, whatsappHref, smsHref } from '../utils/customer-message'
 
 export const Route = createFileRoute('/')({
@@ -549,16 +553,18 @@ function TrackerApp() {
 
   // Handle delete work item
   const handleDeleteItem = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this job?')) {
-      return
+    if (!confirm('Are you sure you want to delete this job? This cannot be undone.')) {
+      return false
     }
 
     try {
       await deleteWorkItem({ data: { id } })
       await fetchWorkItems()
+      return true
     } catch (err) {
       console.error('Delete error:', err)
       alert('Failed to delete job')
+      return false
     }
   }
 
@@ -587,6 +593,14 @@ function TrackerApp() {
   }
 
   const [advancingId, setAdvancingId] = useState<number | null>(null)
+  // Cards show the essentials; the rest opens with "More details".
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const toggleExpanded = (id: number) => setExpandedIds((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const advanceStage = async (item: WorkItem) => {
     const next = nextStage(item.status)
     if (!next || advancingId !== null) return
@@ -762,7 +776,7 @@ function TrackerApp() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-white">Work Tracker</h1>
-              <p className="text-[10px] text-slate-400 hidden sm:block">Persistent Multi-Device Task Registry</p>
+              <p className="text-xs text-slate-400 hidden sm:block">Persistent Multi-Device Task Registry</p>
             </div>
           </div>
 
@@ -1293,7 +1307,7 @@ function TrackerApp() {
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
                     <span>Measure booked</span>
-                    <span className="text-[11px] text-slate-500 font-normal">Defaults to 1 hr</span>
+                    <span className="text-xs text-slate-500 font-normal">Defaults to 1 hr</span>
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <input
@@ -1327,7 +1341,7 @@ function TrackerApp() {
                   <label className="block text-sm font-semibold text-slate-300">
                     Fitting date(s) & start times
                   </label>
-                  <span className="text-[11px] text-slate-500 font-normal">Defaults to 1 hr duration</span>
+                  <span className="text-xs text-slate-500 font-normal">Defaults to 1 hr duration</span>
                 </div>
                 <p className="text-xs text-slate-500 mb-2">Select the date and optional start time for each day of the fitting.</p>
                 <div className="space-y-2.5">
@@ -1381,7 +1395,19 @@ function TrackerApp() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-800">
+                {formMode === 'edit' && selectedItemId !== null && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (await handleDeleteItem(selectedItemId)) setFormMode('none')
+                    }}
+                    className="mr-auto inline-flex items-center gap-1.5 px-4 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete job
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setFormMode('none')}
@@ -1397,7 +1423,7 @@ function TrackerApp() {
                   {formSubmitting ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   ) : formMode === 'add' ? (
-                    'Add Item'
+                    'Add Job'
                   ) : (
                     'Save Changes'
                   )}
@@ -1421,7 +1447,7 @@ function TrackerApp() {
           >
             <Briefcase className="w-4 h-4 shrink-0" />
             <span>Active Jobs</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300">
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
               {activeItems.length}
             </span>
           </button>
@@ -1437,7 +1463,7 @@ function TrackerApp() {
           >
             <CalendarIcon className="w-4 h-4 shrink-0 text-emerald-400" />
             <span>Schedule</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               {workItemsList.filter((i) => i.measuredBooked || i.fittingDate).length + calendarEventsList.length}
             </span>
           </button>
@@ -1453,7 +1479,7 @@ function TrackerApp() {
           >
             <Archive className="w-4 h-4 shrink-0" />
             <span>Archive</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300">
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
               {archivedItems.length}
             </span>
           </button>
@@ -1502,36 +1528,29 @@ function TrackerApp() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredItems.map((item) => {
-              // Status Badge Coloring
-              let statusBadgeClass = ''
-              if (item.status === 'Completed') {
-                statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              } else if (item.status === 'In progress') {
-                statusBadgeClass = 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-              } else if (item.status === 'Measure booked') {
-                statusBadgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              } else if (item.status === 'Fitting booked') {
-                statusBadgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
-              } else if (item.status === 'Quote sent') {
-                statusBadgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              } else if (item.status === 'New enquiry' || item.status === 'Pending') {
-                statusBadgeClass = 'bg-slate-500/10 text-slate-300 border border-slate-500/20'
-              } else {
-                statusBadgeClass = 'bg-slate-700/10 text-slate-300 border border-slate-700/20'
-              }
+              const stage = stageStyle(item.status)
+              const statusBadgeClass = stage.badge
+              const upcoming = nextAppointment(item.measuredBooked, item.fittingDate, localToday())
+              const expanded = expandedIds.has(item.id)
 
               return (
                 <div
                   key={item.id}
-                  className="bg-slate-900/40 rounded-2xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/65 transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-md hover:shadow-xl"
+                  className={`bg-slate-900/40 rounded-2xl border border-slate-800 border-l-4 ${stage.stripe} hover:bg-slate-900/65 transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-md hover:shadow-xl`}
                 >
                   <div className="p-6 space-y-4">
                     {/* Customer & Location */}
                     <div className="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-3">
                       <div className="space-y-1.5 flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-lg tracking-tight group-hover:text-emerald-400 transition-colors">
+                        <h4 className="font-bold text-white text-xl tracking-tight">
                           {item.customerName}
                         </h4>
+                        {upcoming && (
+                          <p className={`flex items-center gap-1.5 text-base font-bold ${upcoming.kind === 'Measure' ? 'text-sky-300' : 'text-violet-300'}`}>
+                            {upcoming.kind === 'Measure' ? <Ruler className="w-4 h-4 shrink-0" /> : <Hammer className="w-4 h-4 shrink-0" />}
+                            {upcoming.kind} {formatAppointmentDate(upcoming.value, localToday())}
+                          </p>
+                        )}
 
                         {/* Highlighted Clickable Address */}
                         <div>
@@ -1539,7 +1558,7 @@ function TrackerApp() {
                             href={`https://maps.google.com/?q=${encodeURIComponent(item.site)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 text-xs font-semibold transition-all shadow-sm group/site max-w-full"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 text-sm font-semibold transition-all shadow-sm group/site max-w-full"
                             title="Open address in Maps"
                           >
                             <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover/site:scale-110 transition-transform" />
@@ -1569,7 +1588,7 @@ function TrackerApp() {
                           <div>
                             <a
                               href={getDialHref(item.customerPhone)}
-                              className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-emerald-300 transition-colors"
+                              className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-emerald-300 transition-colors"
                             >
                               <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
                               <span>{item.customerPhone}</span>
@@ -1585,7 +1604,7 @@ function TrackerApp() {
                                     target="_blank"
                                     rel="noreferrer"
                                     onClick={() => onMessagedCustomer(item)}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-xs font-semibold transition-all"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-sm font-semibold transition-all"
                                     title="WhatsApp the customer to confirm their fitting"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5" />
@@ -1594,7 +1613,7 @@ function TrackerApp() {
                                   <a
                                     href={smsHref(item.customerPhone, message)}
                                     onClick={() => onMessagedCustomer(item)}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/25 text-sky-300 text-xs font-semibold transition-all"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/25 text-sky-300 text-sm font-semibold transition-all"
                                     title="Text the customer to confirm their fitting"
                                   >
                                     <MessageSquare className="w-3.5 h-3.5" />
@@ -1625,15 +1644,26 @@ function TrackerApp() {
                           </div>
                         )}
                       </div>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold shrink-0 ${statusBadgeClass}`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold shrink-0 ${statusBadgeClass}`}>
                         {item.status}
                       </span>
                     </div>
 
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(item.id)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-800 text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+                      aria-expanded={expanded}
+                    >
+                      {expanded ? 'Less' : 'More details'}
+                      <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    </button>
+
                     {/* Requirements / Details */}
+                    {expanded && (
                     <div className="space-y-3.5">
                       <div>
-                        <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">What’s Required</p>
+                        <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">What’s Required</p>
                         <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
                           {item.whatsRequired}
                         </p>
@@ -1641,7 +1671,7 @@ function TrackerApp() {
 
                       {item.whereNeedsMeasuring && (
                         <div>
-                          <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wider">Where Needs Measuring</p>
+                          <p className="text-xs font-semibold text-sky-400 uppercase tracking-wider">Where Needs Measuring</p>
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
                             {item.whereNeedsMeasuring}
                           </p>
@@ -1650,7 +1680,7 @@ function TrackerApp() {
 
                       {item.notes && (
                         <div>
-                          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Notes</p>
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</p>
                           <p className="text-xs text-slate-400 leading-relaxed italic mt-0.5 whitespace-pre-line">
                             {item.notes}
                           </p>
@@ -1659,7 +1689,7 @@ function TrackerApp() {
 
                       {(item as any).samples && (
                         <div>
-                          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">Samples</p>
+                          <p className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Samples</p>
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
                             {(item as any).samples}
                           </p>
@@ -1688,20 +1718,20 @@ function TrackerApp() {
 
                       {item.carpetOrderedDate && (
                         <div>
-                          <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Carpet ordered</p>
+                          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Carpet ordered</p>
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">{new Date(item.carpetOrderedDate).toLocaleDateString()}</p>
                         </div>
                       )}
                       {item.carpetCostPerSqm && (
                         <div>
-                          <p className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Carpet cost per m² (excl. VAT)</p>
+                          <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Carpet cost per m² (excl. VAT)</p>
                           <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">£{item.carpetCostPerSqm}</p>
                         </div>
                       )}
                       {item.measuredBooked && (
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Measure booked</p>
+                            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Measure booked</p>
                             <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
                               {formatDateTimeDisplay(item.measuredBooked, 1)}
                             </p>
@@ -1719,7 +1749,7 @@ function TrackerApp() {
                       {item.fittingDate && (
                         <div>
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider">
+                            <p className="text-xs font-semibold text-violet-400 uppercase tracking-wider">
                               Fitting date{item.fittingDate.includes(',') ? 's' : ''}
                             </p>
                             <AddToCalendarButton
@@ -1748,39 +1778,34 @@ function TrackerApp() {
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
 
                   {/* Actions & Timestamps Footer */}
-                  <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800/50 flex items-center justify-between text-xs text-slate-500 mt-auto">
+                  <div className="px-5 py-4 bg-slate-950/80 border-t border-slate-800/50 flex items-center justify-between gap-3 text-sm text-slate-500 mt-auto">
                     <span title={`Updated: ${new Date(item.updatedAt).toLocaleString()}`}>
-                      Updated: {new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      Updated {new Date(item.updatedAt).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
                     </span>
-                    
-                    <div className="flex items-center gap-1">
+
+                    <div className="flex items-center gap-2">
                       {nextStage(item.status) && (
                         <button
                           onClick={() => advanceStage(item)}
                           disabled={advancingId === item.id}
-                          className="inline-flex items-center gap-1 mr-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-sm font-semibold transition-all cursor-pointer disabled:opacity-50"
                           title={`Move this job to ${nextStage(item.status)}`}
                         >
                           {advancingId === item.id ? 'Saving…' : nextStage(item.status)}
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-4 h-4" />
                         </button>
                       )}
                       <button
                         onClick={() => openEditForm(item)}
-                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/50 transition-all cursor-pointer"
-                        title="Edit Item"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800/50 text-sm font-semibold transition-all cursor-pointer"
+                        title="Edit job"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer"
-                        title="Delete Item"
-                      >
-                        <Trash2 className="w-4 h-4" />
+                        Edit
                       </button>
                     </div>
                   </div>
@@ -1845,7 +1870,7 @@ function TrackerApp() {
                   <div>
                     <label className="block text-sm font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
                       <span>Start Time</span>
-                      <span className="text-[10px] text-slate-500 font-normal">1 hr default</span>
+                      <span className="text-xs text-slate-500 font-normal">1 hr default</span>
                     </label>
                     <input
                       type="time"

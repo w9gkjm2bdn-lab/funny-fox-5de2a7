@@ -87,7 +87,7 @@ export default function AddToCalendarButton({
 
       {open && (
         <div className="absolute right-0 bottom-full sm:bottom-auto sm:top-full mb-1.5 sm:mb-0 sm:mt-1.5 w-56 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 animate-fade-in">
-          <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-800/80">
+          <p className="px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-800/80">
             Export Event
           </p>
 
