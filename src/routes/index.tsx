@@ -24,6 +24,7 @@ import {
   FolderOpen,
   Calendar as CalendarIcon,
   ExternalLink,
+  ChevronRight,
 } from 'lucide-react'
 import {
   login,
@@ -40,11 +41,13 @@ import {
   deleteCalendarEvent,
   unsubscribeFromNotifications,
   markCustomerContacted,
+  setWorkItemStatus,
 } from '../server/tracker.functions'
 import WorkCalendarModal, { CalendarEventItem } from '../components/WorkCalendar'
 import NotificationSettings from '../components/NotificationSettings'
 import AddToCalendarButton from '../components/AddToCalendarButton'
 import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
+import { nextStage } from '../utils/job-stages'
 import { nextFittingDate, fittingMessage, whatsappHref, smsHref } from '../utils/customer-message'
 
 export const Route = createFileRoute('/')({
@@ -581,6 +584,22 @@ function TrackerApp() {
   const localToday = () => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+
+  const [advancingId, setAdvancingId] = useState<number | null>(null)
+  const advanceStage = async (item: WorkItem) => {
+    const next = nextStage(item.status)
+    if (!next || advancingId !== null) return
+    if (next === 'Completed' && !window.confirm(`Mark ${item.customerName} as completed? It will move to the Archive.`)) return
+    setAdvancingId(item.id)
+    try {
+      await setWorkItemStatus({ data: { id: item.id, status: next } })
+      await fetchWorkItems()
+    } catch {
+      window.alert('Could not update the job. Please try again.')
+    } finally {
+      setAdvancingId(null)
+    }
   }
 
   // Tapping a message button counts as checking in, so tomorrow's reminder doesn't nag.
@@ -1717,6 +1736,17 @@ function TrackerApp() {
                     </span>
                     
                     <div className="flex items-center gap-1">
+                      {nextStage(item.status) && (
+                        <button
+                          onClick={() => advanceStage(item)}
+                          disabled={advancingId === item.id}
+                          className="inline-flex items-center gap-1 mr-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                          title={`Move this job to ${nextStage(item.status)}`}
+                        >
+                          {advancingId === item.id ? 'Saving…' : nextStage(item.status)}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => openEditForm(item)}
                         className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/50 transition-all cursor-pointer"

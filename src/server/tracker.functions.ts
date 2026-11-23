@@ -8,6 +8,7 @@ import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDeciphe
 
 import { getPushKeys, notifyAllSubscribers, sendPush } from "./push.js";
 import { calendarFeedToken } from "./feed-token.js";
+import { JOB_STAGES } from "../utils/job-stages.js";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -552,4 +553,16 @@ export const markCustomerContacted = createServerFn({ method: "POST" })
     if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
     await db.update(workItems).set({ customerContacted: true, updatedAt: new Date() }).where(eq(workItems.id, data.id));
     return { success: true };
+  });
+
+// One-tap stage change from the job card, without resending the whole form.
+export const setWorkItemStatus = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ id: z.number(), status: z.enum(JOB_STAGES) }))
+  .handler(async ({ data }) => {
+    if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
+    const [updated] = await db.update(workItems).set({ status: data.status, updatedAt: new Date() })
+      .where(eq(workItems.id, data.id)).returning();
+    if (!updated) throw new Error("Work item not found");
+    await notifyAllSubscribers("Work item updated", `${updated.customerName} moved to ${data.status}.`);
+    return updated;
   });
