@@ -1255,12 +1255,23 @@ function TrackerApp() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet ordered</label>
-                  <input
-                    type="date"
-                    value={carpetOrderedDate}
-                    onChange={(e) => setCarpetOrderedDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                  />
+                  <div className="flex items-stretch gap-2">
+                    <input
+                      type="date"
+                      value={carpetOrderedDate}
+                      onChange={(e) => setCarpetOrderedDate(e.target.value)}
+                      className="flex-1 min-w-0 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCarpetOrderedDate('')}
+                      disabled={!carpetOrderedDate}
+                      className="px-3 text-xs font-semibold text-slate-400 hover:text-red-400 rounded-xl hover:bg-red-500/10 border border-slate-800 hover:border-red-500/20 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      title="Clear carpet ordered date"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">Carpet cost per m² (excl. VAT)</label>
@@ -1301,6 +1312,15 @@ function TrackerApp() {
                       />
                     </div>
                   </div>
+                  {(measuredBookedDate || measuredBookedTime) && (
+                    <button
+                      type="button"
+                      onClick={() => { setMeasuredBookedDate(''); setMeasuredBookedTime('') }}
+                      className="mt-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                    >
+                      Clear measure date
+                    </button>
+                  )}
                 </div>
               </div>
               <div>
