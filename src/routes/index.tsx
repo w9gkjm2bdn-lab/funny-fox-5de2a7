@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Ruler,
   Hammer,
+  Bell,
 } from 'lucide-react'
 import {
   login,
@@ -130,6 +131,7 @@ function TrackerApp() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formSubmitting, setFormSubmitting] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileDisplayName, setProfileDisplayName] = useState('')
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [profilePassword, setProfilePassword] = useState('')
@@ -779,17 +781,27 @@ function TrackerApp() {
       {/* Top Header */}
       <header className="sticky top-0 z-10 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Database className="w-6 h-6" />
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+              <Database className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white">Work Tracker</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white whitespace-nowrap">Work Tracker</h1>
               <p className="text-xs text-slate-400 hidden sm:block">Persistent Multi-Device Task Registry</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(o => !o)}
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${notificationsOpen ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-transparent'}`}
+              title="Notification settings"
+              aria-label="Notification settings"
+              aria-pressed={notificationsOpen}
+            >
+              <Bell className="w-5 h-5" />
+            </button>
             <button
               onClick={openProfile}
               className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-sm text-left hover:bg-slate-900 transition-all"
@@ -810,7 +822,7 @@ function TrackerApp() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 space-y-8">
-        <NotificationSettings />
+        <NotificationSettings open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
         {/* KPI Dashboard Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 shadow-lg flex items-center justify-between">

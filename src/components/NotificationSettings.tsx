@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, X } from 'lucide-react'
 import { getNotificationKey, subscribeToNotifications, unsubscribeFromNotifications, testNotification } from '../server/tracker.functions'
 
 function applicationKey(value: string) {
@@ -7,11 +7,15 @@ function applicationKey(value: string) {
   return Uint8Array.from(decoded, c => c.charCodeAt(0))
 }
 
-export default function NotificationSettings() {
+// Shown until notifications are on for this device; after that it stays out of the
+// way and the header bell reopens it (to send a test or turn them off).
+export default function NotificationSettings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [supported, setSupported] = useState(false)
   const [enabled, setEnabled] = useState(false)
   const [busy, setBusy] = useState(true)
   const [message, setMessage] = useState('')
+  // Keeps the box up after enabling, so the confirmation and test button are seen.
+  const [changedThisVisit, setChangedThisVisit] = useState(false)
   useEffect(() => {
     let active = true
     const support = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
@@ -52,7 +56,8 @@ export default function NotificationSettings() {
         subscription ||= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationKey(publicKey) })
         await save(subscription)
         setEnabled(true)
-        setMessage('Notifications enabled on this device.')
+        setChangedThisVisit(true)
+        setMessage('Notifications enabled on this device. Use the bell at the top to change this later.')
       }
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to update notifications.') }
     finally { setBusy(false) }
@@ -69,9 +74,15 @@ export default function NotificationSettings() {
     finally { setBusy(false) }
   }
 
-  return <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5" aria-label="Push notifications">
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div className="flex gap-3"><Bell className="w-5 h-5 text-emerald-400 shrink-0 mt-1" /><div>
+  // Nothing to show while checking, or once they're on (unless asked for).
+  if (busy && !open && !changedThisVisit && !message) return null
+  if (enabled && !open && !changedThisVisit) return null
+
+  const closable = enabled || open
+  return <section className="relative rounded-2xl border border-slate-800 bg-slate-900/50 p-5" aria-label="Push notifications">
+    {closable && <button type="button" onClick={() => { setChangedThisVisit(false); setMessage(''); onClose() }} className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60" aria-label="Close notification settings"><X className="w-4 h-4" /></button>}
+    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${closable ? "sm:pr-8" : ""}`}>
+      <div className={`flex gap-3 ${closable ? "pr-8 sm:pr-0" : ""}`}><Bell className="w-5 h-5 text-emerald-400 shrink-0 mt-1" /><div>
         <h2 className="font-semibold text-white">Job notifications <span className="text-xs text-slate-400 ml-2">{enabled ? 'On for this device' : 'Off for this device'}</span></h2>
         <p className="text-sm text-slate-400 mt-1">New jobs and changes, plus install, measuring and delivery reminders at 6 pm the day before and 7 am on the day (UK time).</p>
       </div></div>
