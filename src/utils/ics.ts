@@ -287,7 +287,7 @@ export function makeGoogleCalendarUrl(opts: {
  * Download a single event directly as an .ics file on iOS / Android / Desktop
  */
 export function downloadICSFile(filename: string, event: ICSEventItem) {
-  const ics = generateICSFeed('T&M Carpets', [event])
+  const ics = generateICSFeed('T&M Flooring', [event])
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
