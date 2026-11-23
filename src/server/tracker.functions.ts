@@ -1,14 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
+import { getCookie, setCookie, deleteCookie, getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { db } from "../../db/index.js";
-import { users, workItems, calendarEvents, notificationSubscriptions } from "../../db/schema.js";
-import { eq, desc, and } from "drizzle-orm";
-import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "crypto";
+import { users, workItems, calendarEvents, notificationSubscriptions, loginFailures } from "../../db/schema.js";
+import { eq, desc, and, gt, lt, type SQL } from "drizzle-orm";
+import { scryptSync, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv, createHash, createHmac } from "crypto";
 
 import { getPushKeys, notifyAllSubscribers, sendPush } from "./push.js";
 import { calendarFeedToken } from "./feed-token.js";
 import { JOB_STAGES } from "../utils/job-stages.js";
+import { LOGIN_WINDOW_MS, MAX_FAILURES_PER_USERNAME, MAX_FAILURES_PER_IP, lockoutRemainingMs, lockoutMessage } from "./login-limit.js";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -27,53 +28,71 @@ function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
-const SECRET_KEY = process.env.SESSION_SECRET || "work-tracker-secure-fallback-secret-key-32b";
-const key = Buffer.from(SECRET_KEY.padEnd(32).slice(0, 32));
+// The session key must never come from the repo (it is public). Use SESSION_SECRET
+// when set; otherwise derive one from the push private key, which lives only in
+// Netlify env vars or the database.
+let sessionKey: Promise<Buffer> | null = null;
+function getSessionKey(): Promise<Buffer> {
+  sessionKey ??= (async () => {
+    const secret = process.env.SESSION_SECRET;
+    if (secret && secret.length >= 32) return createHash("sha256").update(secret).digest();
+    const { privateKey } = await getPushKeys();
+    return createHmac("sha256", privateKey).update("session-key-v1").digest();
+  })().catch(err => { sessionKey = null; throw err; });
+  return sessionKey;
+}
 
-function encryptSession(userId: number, username: string, isAdmin: boolean = false): string {
+const SESSION_COOKIE = "work_tracker_session";
+const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+async function encryptSession(userId: number, username: string, isAdmin: boolean = false): Promise<string> {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const data = JSON.stringify({ userId, username, isAdmin, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+  const cipher = createCipheriv("aes-256-gcm", await getSessionKey(), iv);
+  const data = JSON.stringify({ userId, username, isAdmin, exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000 });
   let encrypted = cipher.update(data, "utf8", "hex");
   encrypted += cipher.final("hex");
   const tag = cipher.getAuthTag().toString("hex");
   return `${iv.toString("hex")}:${encrypted}:${tag}`;
 }
 
-function decryptSession(token: string): { userId: number; username: string; isAdmin: boolean } | null {
+async function decryptSession(token: string): Promise<{ userId: number; username: string; isAdmin: boolean } | null> {
   try {
     const [ivHex, encrypted, tagHex] = token.split(":");
     if (!ivHex || !encrypted || !tagHex) return null;
     const iv = Buffer.from(ivHex, "hex");
     const tag = Buffer.from(tagHex, "hex");
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    if (iv.length !== 12 || tag.length !== 16) return null;
+    const decipher = createDecipheriv("aes-256-gcm", await getSessionKey(), iv);
     decipher.setAuthTag(tag);
     let decrypted = decipher.update(encrypted, "hex", "utf8");
     decrypted += decipher.final("utf8");
     const payload = JSON.parse(decrypted);
-    if (payload.exp < Date.now()) return null;
+    if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
     return payload;
   } catch (err) {
     return null;
   }
 }
 
+// Seeds the two admin accounts on a brand-new database. The starting password comes
+// from the DEFAULT_ADMIN_PASSWORD env var so it is never in the (public) repo.
+let defaultUsersChecked = false;
 async function ensureDefaultUsers() {
+  if (defaultUsersChecked) return;
   try {
-    const existingUsers = await db.select().from(users).limit(1);
+    const existingUsers = await db.select({ id: users.id }).from(users).limit(1);
     if (existingUsers.length === 0) {
-      const defaultUsers = [
-        { username: "tom", passwordHash: hashPassword("Password123"), displayName: "Tom", imageUrl: "", isAdmin: true },
-        { username: "chris", passwordHash: hashPassword("Password123"), displayName: "Chris", imageUrl: "", isAdmin: true },
-      ];
-      await db.insert(users).values(defaultUsers);
+      const initialPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+      if (!initialPassword || initialPassword.length < 8) {
+        console.warn("No users exist. Set DEFAULT_ADMIN_PASSWORD (8+ characters) to create the admin accounts.");
+        return;
+      }
+      await db.insert(users).values([
+        { username: "tom", passwordHash: hashPassword(initialPassword), displayName: "Tom", imageUrl: "", isAdmin: true },
+        { username: "chris", passwordHash: hashPassword(initialPassword), displayName: "Chris", imageUrl: "", isAdmin: true },
+      ]).onConflictDoNothing();
     }
-    try {
-      await db.update(users).set({ isAdmin: true }).where(eq(users.username, "chris"));
-      await db.update(users).set({ isAdmin: true }).where(eq(users.username, "tom"));
-    } catch (e) {
-      // ignore if migration/state doesn't include column yet
-    }
+    defaultUsersChecked = true;
   } catch (err) {
     console.error("Error during default user seeding:", err);
   }
@@ -89,9 +108,20 @@ async function actorName(user: { userId: number; username: string }) {
 }
 
 async function getAuthenticatedUser() {
-  const sessionToken = getCookie("work_tracker_session");
+  const sessionToken = getCookie(SESSION_COOKIE);
   if (!sessionToken) return null;
   return decryptSession(sessionToken);
+}
+
+// Netlify passes the real client address in this header.
+function clientIp() {
+  return getRequestHeader("x-nf-client-connection-ip") || getRequestIP({ xForwardedFor: true }) || "unknown";
+}
+
+async function recentFailures(where: SQL | undefined, max: number) {
+  const rows = await db.select({ createdAt: loginFailures.createdAt }).from(loginFailures)
+    .where(where).orderBy(desc(loginFailures.createdAt)).limit(max);
+  return rows.map(row => row.createdAt);
 }
 
 export const login = createServerFn({ method: "POST" })
@@ -102,23 +132,45 @@ export const login = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await ensureDefaultUsers();
 
+    const username = data.username.trim().toLowerCase();
+    const ip = clientIp();
+    const now = Date.now();
+    const since = new Date(now - LOGIN_WINDOW_MS);
+
+    // Checked before the password so a locked account can't be guessed at all.
+    const [byUsername, byIp] = await Promise.all([
+      recentFailures(and(eq(loginFailures.username, username), gt(loginFailures.createdAt, since)), MAX_FAILURES_PER_USERNAME),
+      recentFailures(and(eq(loginFailures.ip, ip), gt(loginFailures.createdAt, since)), MAX_FAILURES_PER_IP),
+    ]);
+    const waitMs = Math.max(
+      lockoutRemainingMs(byUsername, MAX_FAILURES_PER_USERNAME, now),
+      lockoutRemainingMs(byIp, MAX_FAILURES_PER_IP, now),
+    );
+    if (waitMs > 0) throw new Error(lockoutMessage(waitMs));
+
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.username, data.username.toLowerCase()))
+      .where(eq(users.username, username))
       .limit(1);
 
     if (!user || !verifyPassword(data.password, user.passwordHash)) {
+      await db.insert(loginFailures).values({ username, ip });
+      await db.delete(loginFailures).where(lt(loginFailures.createdAt, new Date(now - 24 * 60 * 60 * 1000)));
       throw new Error("Invalid username or password");
     }
 
-    const token = encryptSession(user.id, user.username, user.isAdmin);
+    await db.delete(loginFailures).where(eq(loginFailures.username, username));
 
-    setCookie("work_tracker_session", token, {
+    const token = await encryptSession(user.id, user.username, user.isAdmin);
+
+    setCookie(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      // Netlify functions don't reliably set NODE_ENV, so only relax this for local dev.
+      secure: process.env.NODE_ENV !== "development",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
     });
 
     return {
@@ -132,7 +184,7 @@ export const login = createServerFn({ method: "POST" })
 
 export const logout = createServerFn({ method: "POST" })
   .handler(async () => {
-    deleteCookie("work_tracker_session");
+    deleteCookie(SESSION_COOKIE, { path: "/" });
     return { success: true };
   });
 

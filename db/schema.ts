@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, integer, index } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -69,3 +69,14 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
   key: text("key").primaryKey(),
   claimedAt: timestamp("claimed_at").defaultNow().notNull(),
 });
+
+// Failed sign-ins, used to slow down password guessing. Rows older than a day are pruned.
+export const loginFailures = pgTable("login_failures", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull(),
+  ip: text("ip").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("login_failures_username_created_at_idx").on(table.username, table.createdAt),
+  index("login_failures_ip_created_at_idx").on(table.ip, table.createdAt),
+]);

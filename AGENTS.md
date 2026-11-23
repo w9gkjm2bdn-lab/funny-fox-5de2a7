@@ -73,7 +73,7 @@ A secure, persistent Work Tracker designed for field workers, allowing multiple 
 - **Zero-Dependency Security:** All cryptography utilizes standard Node.js native `crypto` modules (`scryptSync` for slow password hashing, `createCipheriv`/`createDecipheriv` with `aes-256-gcm` for authenticated session token encryption). This prevents native compilation issues in serverless or virtual environments.
 - **Session Tokens:** Stateless, AES-GCM encrypted strings containing user details, admin status, and expiration timestamps. Stored in a secure `httpOnly` browser cookie named `work_tracker_session`.
 - **Pre-Seeded Admin Accounts:** To guarantee immediate multi-user functionality without administrative delays, the server automatically seeds the database with default admin accounts if the `users` table is completely empty. See **Default Accounts** section below.
-- **Open Registration:** Team members can register custom accounts via the client registration tab. New registrations default to standard user privileges (non-admin).
+- **Registration Disabled:** Self-registration is turned off server-side (`register` always throws). Admins create accounts.
 - **Admin Privileges:** Admin users are designated by the `isAdmin` flag and can perform system management tasks. The `isAdmin` status is included in encrypted session tokens for authorization checks.
 
 ---
@@ -85,7 +85,7 @@ On first deployment or when the `users` table is empty, two admin accounts are a
 1. **Tom** - Admin account
 2. **Chris** - Admin account
 
-These accounts are created programmatically in the `ensureDefaultUsers()` function in `src/server/tracker.functions.ts`. Contact your administrator for account access credentials.
+These accounts are created programmatically in the `ensureDefaultUsers()` function in `src/server/tracker.functions.ts`, using the `DEFAULT_ADMIN_PASSWORD` environment variable as the starting password. If it is not set, no accounts are seeded. This repository is public, so never put a password in code.
 
 ---
 
@@ -107,6 +107,12 @@ npm install
 npx netlify dev --port 8889
 ```
 
+### Tests
+```bash
+npm test          # node:test unit tests in tests/
+npm run typecheck
+```
+
 ### Database Schema Updates
 1. Modify schema in `db/schema.ts`
 2. Run: `npx drizzle-kit generate`
@@ -115,7 +121,9 @@ npx netlify dev --port 8889
 
 ### Environment Variables
 The following environment variable should be configured in your Netlify deployment settings:
-- `SESSION_SECRET`: A secure encryption key for session tokens (min 32 characters). Falls back to a default if not configured, but production deployments should always set this explicitly.
+- `SESSION_SECRET`: A secure encryption key for session tokens (min 32 characters). If not set, a key is derived from the VAPID private key (env or database), never from the repo. Changing it signs everyone out.
+- `DEFAULT_ADMIN_PASSWORD`: Starting password for the seeded admin accounts on an empty database only.
+- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`: Optional push keys; generated and stored in the database if absent.
 
 ---
 
@@ -125,4 +133,5 @@ The following environment variable should be configured in your Netlify deployme
 - **Environment Variables:** Sensitive values like `SESSION_SECRET` must be stored in Netlify environment settings, never in version control.
 - **Admin Flag:** Use the `isAdmin` column to gate administrative functionality on both frontend and backend.
 - **Password Hashing:** All passwords are hashed using scrypt with random salt. Never store or transmit plaintext passwords.
+- **Login Rate Limiting:** Failed sign-ins are recorded in `login_failures`. 5 failures for a username, or 20 from one IP (`x-nf-client-connection-ip`), within 15 minutes block further attempts until the oldest ages out. Limits live in `src/server/login-limit.ts`.
 - **Session Expiration:** Session tokens expire after 30 days and are verified with AES-GCM authentication.
