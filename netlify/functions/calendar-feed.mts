@@ -4,6 +4,7 @@ import type { Config } from '@netlify/functions'
 import { db } from '../../db/index.js'
 import { workItems, calendarEvents } from '../../db/schema.js'
 import { isValidFeedToken } from '../../src/server/feed-token.js'
+import { BUSINESS_NAME } from '../../src/utils/brand.js'
 import { generateICSFeed, ICSEventItem, parseDateTimeString, formatDateTimeDisplay } from '../../src/utils/ics.js'
 
 export default async (req: Request) => {
@@ -91,7 +92,7 @@ export default async (req: Request) => {
       }
     })
 
-    const calName = assignee ? `Work Tracker (${assignee.toUpperCase()})` : 'Work Tracker Schedule'
+    const calName = assignee ? `${BUSINESS_NAME} (${assignee.charAt(0).toUpperCase()}${assignee.slice(1)})` : `${BUSINESS_NAME} Schedule`
     const icsContent = generateICSFeed(calName, events)
 
     return new Response(icsContent, {

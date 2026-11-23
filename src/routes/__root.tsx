@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 
 
 import '../styles.css'
+import { BUSINESS_NAME } from '../utils/brand'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -19,10 +20,10 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Work Tracker',
+        title: BUSINESS_NAME,
       },
       { name: 'theme-color', content: '#020617' },
-      { name: 'apple-mobile-web-app-title', content: 'Tracker' },
+      { name: 'apple-mobile-web-app-title', content: BUSINESS_NAME },
     ],
   }),
   shellComponent: RootDocument,

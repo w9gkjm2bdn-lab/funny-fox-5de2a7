@@ -4,7 +4,7 @@ self.addEventListener('activate', event => event.waitUntil(self.clients.claim())
 self.addEventListener('push', (event) => {
   let payload = null
   try { payload = event.data ? event.data.json() : null } catch { /* Use fallback message. */ }
-  const title = payload?.title || 'Work Tracker Update'
+  const title = payload?.title || 'T&M Flooring'
   const body = payload?.body || 'A change was made in the tracker.'
 
   const options = {
