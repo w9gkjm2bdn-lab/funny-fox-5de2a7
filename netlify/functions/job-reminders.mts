@@ -28,7 +28,7 @@ export default async () => {
     if (job.status === 'Completed') continue
     add(`job-${job.id}-fitting`, job.customerName, 'Install', job.fittingDate, job.site)
     add(`job-${job.id}-measure`, job.customerName, 'Measuring', job.measuredBooked, job.site)
-    for (const date of scheduledDates(job.fittingDate)) {
+    for (const date of job.customerContacted ? [] : scheduledDates(job.fittingDate)) {
       if (!checkInTargets.includes(date.slice(0, 10))) continue
       const time = date.length > 10 ? ` at ${date.slice(11, 16)}` : ''
       reminders.push({

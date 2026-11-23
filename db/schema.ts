@@ -34,6 +34,7 @@ export const workItems = pgTable("work_items", {
   carpetAndFlooringOrdered: boolean("carpet_and_flooring_ordered").notNull().default(false),
   upliftAndDisposal: boolean("uplift_and_disposal").notNull().default(false),
   furniture: boolean("furniture").notNull().default(false),
+  customerContacted: boolean("customer_contacted").notNull().default(false),
   assignedTo: text("assigned_to"),
   measuredBy: text("measured_by"),
   measuredBooked: text("measured_booked"),

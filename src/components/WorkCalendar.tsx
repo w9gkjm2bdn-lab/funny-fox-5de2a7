@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { getCalendarFeedKey } from '../server/tracker.functions'
 import {
   ChevronLeft,
   ChevronRight,
@@ -333,13 +334,20 @@ export default function WorkCalendarModal({
 
   const selectedDateEvents = eventsByDate.get(selectedDate) || []
 
+  // The feed URL carries a secret key, fetched only once the sync window is opened.
+  const [feedKey, setFeedKey] = useState('')
+  useEffect(() => {
+    if (!showSyncModal || feedKey) return
+    getCalendarFeedKey().then(r => setFeedKey(r.key)).catch(() => {})
+  }, [showSyncModal, feedKey])
+
   const todayStr = (() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   })()
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  const feedUrl = `${baseUrl}/api/calendar-feed.ics`
+  const feedUrl = feedKey ? `${baseUrl}/api/calendar-feed.ics?key=${feedKey}` : ''
   const webcalUrl = feedUrl.replace(/^https?:\/\//, 'webcal://')
 
   const copyFeedLink = () => {
@@ -712,7 +720,7 @@ export default function WorkCalendarModal({
                   <p className="text-[11px] text-slate-400">Tap below to auto-subscribe in Apple Calendar</p>
                 </div>
                 <a
-                  href={webcalUrl}
+                  href={feedUrl ? webcalUrl : undefined}
                   className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
                 >
                   Subscribe on iPhone
@@ -735,7 +743,7 @@ export default function WorkCalendarModal({
                 <input
                   type="text"
                   readOnly
-                  value={feedUrl}
+                  value={feedUrl || 'Loading your private link…'}
                   className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 font-mono select-all focus:outline-none"
                 />
                 <button
@@ -748,6 +756,10 @@ export default function WorkCalendarModal({
                 </button>
               </div>
             </div>
+
+            <p className="text-[11px] text-amber-300/80 leading-relaxed">
+              This link is private — it shows customer details to anyone who has it. Only add it to your own devices.
+            </p>
 
             <div className="flex justify-end pt-2">
               <button
