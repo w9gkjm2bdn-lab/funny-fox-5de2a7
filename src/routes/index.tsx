@@ -55,6 +55,7 @@ import { nextStage, stageStyle } from '../utils/job-stages'
 import { nextAppointment, formatAppointmentDate } from '../utils/next-appointment'
 import { nextFittingDate, fittingMessage, whatsappHref, smsHref } from '../utils/customer-message'
 import { sortByNextAppointment, jobMatchesSearch } from '../utils/job-list'
+import { BUSINESS_NAME, TAGLINE } from '../utils/brand'
 
 export const Route = createFileRoute('/')({
   component: TrackerApp,
@@ -684,7 +685,7 @@ function TrackerApp() {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent border-solid rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-slate-100">Loading Work Tracker...</h2>
+          <h2 className="text-xl font-semibold text-slate-100">Loading {BUSINESS_NAME}…</h2>
         </div>
       </div>
     )
@@ -699,10 +700,10 @@ function TrackerApp() {
             <Database className="w-10 h-10" />
           </div>
           <h2 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
-            Work Tracker
+            {BUSINESS_NAME}
           </h2>
           <p className="mt-2 text-sm text-slate-400">
-            Access across all devices • Fully persistent • Team accounts
+            {TAGLINE}
           </p>
         </div>
 
@@ -806,8 +807,8 @@ function TrackerApp() {
               <Database className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white whitespace-nowrap">Work Tracker</h1>
-              <p className="text-xs text-slate-400 hidden sm:block">Persistent Multi-Device Task Registry</p>
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white whitespace-nowrap">{BUSINESS_NAME}</h1>
+              <p className="text-xs text-slate-400 hidden sm:block">{TAGLINE}</p>
             </div>
           </div>
 

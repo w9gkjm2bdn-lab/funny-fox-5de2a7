@@ -1,4 +1,4 @@
-# Work Tracker
+# T&M Carpets – Job Tracker
 
 A secure, fully persistent, and multi-device Work Tracker web application designed to help teams capture, organize, and monitor jobs. It includes detailed work item records, user accounts, and real-time status reporting.
 
