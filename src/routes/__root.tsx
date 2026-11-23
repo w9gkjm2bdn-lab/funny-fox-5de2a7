@@ -8,6 +8,7 @@ export const Route = createRootRoute({
     links: [
       { rel: 'manifest', href: '/manifest.webmanifest' },
       { rel: 'icon', href: '/favicon.ico' },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
     ],
     meta: [
       {
@@ -20,6 +21,8 @@ export const Route = createRootRoute({
       {
         title: 'Work Tracker',
       },
+      { name: 'theme-color', content: '#020617' },
+      { name: 'apple-mobile-web-app-title', content: 'Tracker' },
     ],
   }),
   shellComponent: RootDocument,

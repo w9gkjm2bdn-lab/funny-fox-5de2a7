@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus,
   Edit,
@@ -33,7 +33,7 @@ import {
 import {
   login,
   logout,
-  getCurrentUser,
+  getStartupData,
   getWorkItems,
   createWorkItem,
   updateWorkItem,
@@ -180,45 +180,70 @@ function TrackerApp() {
       }
     }
 
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', handleEscape)
-
-    return () => {
-      document.body.style.overflow = ''
-      window.removeEventListener('keydown', handleEscape)
-    }
+    return () => window.removeEventListener('keydown', handleEscape)
   }, [formMode])
 
-  // Check auth on mount
+  const lastRefreshRef = useRef(0)
+
+  // Server rows carry Date objects; the UI works with ISO strings.
+  const withIsoDates = <T extends { createdAt: unknown; updatedAt: unknown }>(row: T) => ({
+    ...row,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+  })
+
+  // Show a saved job straight away instead of reloading the whole list.
+  // The list is newest-change first, so a just-saved job goes to the top.
+  const upsertWorkItem = (row: any) => {
+    if (!row) return
+    const item = withIsoDates(row) as WorkItem
+    setWorkItemsList((prev) => [item, ...prev.filter((i) => i.id !== item.id)])
+  }
+
+  // Check auth on mount: user, jobs and calendar arrive in one request.
   useEffect(() => {
-    async function checkAuth() {
+    async function loadStartup() {
       try {
-        const currentUser = await getCurrentUser()
-        if (currentUser) {
-          setUser(currentUser)
-          await Promise.all([fetchWorkItems(), fetchCalendarEvents()])
+        const startup = await getStartupData()
+        if (startup) {
+          setUser(startup.user)
+          setWorkItemsList(startup.workItems.map((item: any) => withIsoDates(item) as WorkItem))
+          setCalendarEventsList(startup.calendarEvents.map((ev: any) => withIsoDates(ev) as CalendarEventItem))
+          lastRefreshRef.current = Date.now()
         }
       } catch (err) {
-        console.error('Failed to get current user:', err)
+        console.error('Failed to load tracker:', err)
       } finally {
         setLoading(false)
       }
     }
-    checkAuth()
+    loadStartup()
   }, [])
+
+  // Pick up the other person's changes when the app is brought back to the front.
+  useEffect(() => {
+    if (!user) return
+    const refreshIfStale = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRefreshRef.current < 30_000) return
+      lastRefreshRef.current = Date.now()
+      fetchWorkItems()
+      fetchCalendarEvents()
+    }
+    document.addEventListener('visibilitychange', refreshIfStale)
+    window.addEventListener('focus', refreshIfStale)
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfStale)
+      window.removeEventListener('focus', refreshIfStale)
+    }
+  }, [user])
 
   // Fetch all items
   const fetchWorkItems = async () => {
     setItemsLoading(true)
     try {
       const data = await getWorkItems()
-      // Map server timestamps and null safety
-      const mapped = data.map((item: any) => ({
-        ...item,
-        createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : String(item.createdAt),
-        updatedAt: item.updatedAt instanceof Date ? item.updatedAt.toISOString() : String(item.updatedAt),
-      }))
-      setWorkItemsList(mapped)
+      setWorkItemsList(data.map((item: any) => withIsoDates(item) as WorkItem))
     } catch (err) {
       console.error('Error fetching work items:', err)
     } finally {
@@ -230,12 +255,7 @@ function TrackerApp() {
   const fetchCalendarEvents = async () => {
     try {
       const data = await getCalendarEvents()
-      const mapped: CalendarEventItem[] = data.map((ev: any) => ({
-        ...ev,
-        createdAt: ev.createdAt instanceof Date ? ev.createdAt.toISOString() : String(ev.createdAt),
-        updatedAt: ev.updatedAt instanceof Date ? ev.updatedAt.toISOString() : String(ev.updatedAt),
-      }))
-      setCalendarEventsList(mapped)
+      setCalendarEventsList(data.map((ev: any) => withIsoDates(ev) as CalendarEventItem))
     } catch (err) {
       console.error('Error fetching calendar events:', err)
     }
@@ -347,7 +367,8 @@ function TrackerApp() {
       setUser(loggedInUser)
       setUsernameInput('')
       setPasswordInput('')
-      await fetchWorkItems()
+      lastRefreshRef.current = Date.now()
+      await Promise.all([fetchWorkItems(), fetchCalendarEvents()])
     } catch (err: any) {
       setAuthError(err?.message || 'Authentication failed. Please try again.')
     } finally {
@@ -503,8 +524,9 @@ function TrackerApp() {
 
     setFormSubmitting(true)
     try {
+      let saved: any = null
       if (formMode === 'add') {
-        await createWorkItem({
+        saved = await createWorkItem({
           data: {
             customerName,
             customerPhone,
@@ -528,7 +550,7 @@ function TrackerApp() {
           },
         })
       } else if (formMode === 'edit' && selectedItemId !== null) {
-        await updateWorkItem({
+        saved = await updateWorkItem({
           data: {
             id: selectedItemId,
             customerName,
@@ -554,7 +576,7 @@ function TrackerApp() {
         })
       }
       setFormMode('none')
-      await fetchWorkItems()
+      upsertWorkItem(saved)
     } catch (err: any) {
       setFormError(err?.message || 'Failed to save job.')
     } finally {
@@ -570,7 +592,7 @@ function TrackerApp() {
 
     try {
       await deleteWorkItem({ data: { id } })
-      await fetchWorkItems()
+      setWorkItemsList((prev) => prev.filter((i) => i.id !== id))
       return true
     } catch (err) {
       console.error('Delete error:', err)
@@ -618,8 +640,7 @@ function TrackerApp() {
     if (next === 'Completed' && !window.confirm(`Mark ${item.customerName} as completed? It will move to the Archive.`)) return
     setAdvancingId(item.id)
     try {
-      await setWorkItemStatus({ data: { id: item.id, status: next } })
-      await fetchWorkItems()
+      upsertWorkItem(await setWorkItemStatus({ data: { id: item.id, status: next } }))
     } catch {
       window.alert('Could not update the job. Please try again.')
     } finally {
@@ -630,7 +651,7 @@ function TrackerApp() {
   // Tapping a message button counts as checking in, so tomorrow's reminder doesn't nag.
   const onMessagedCustomer = (item: WorkItem) => {
     if (item.customerContacted) return
-    markCustomerContacted({ data: { id: item.id } }).then(() => fetchWorkItems()).catch(() => {})
+    markCustomerContacted({ data: { id: item.id } }).then(upsertWorkItem).catch(() => {})
   }
 
   const getWhat3WordsHref = (w3w: string) => {
