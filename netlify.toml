@@ -5,3 +5,10 @@
   command = "npm run dev"
   targetPort = 3000
   port = 8888
+
+# Built JS/CSS file names change whenever their contents do, so phones can keep
+# them for a year instead of re-checking them on every visit.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

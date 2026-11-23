@@ -188,27 +188,41 @@ export const logout = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+async function loadCurrentUser() {
+  await ensureDefaultUsers();
+  const sessionUser = await getAuthenticatedUser();
+  if (!sessionUser) return null;
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, sessionUser.userId))
+    .limit(1);
+
+  if (!user) return null;
+
+  return {
+    userId: user.id,
+    username: user.username,
+    isAdmin: user.isAdmin,
+    displayName: user.displayName || user.username,
+    imageUrl: user.imageUrl || "",
+  };
+}
+
 export const getCurrentUser = createServerFn({ method: "GET" })
+  .handler(async () => loadCurrentUser());
+
+// Everything the main screen needs, in one round trip.
+export const getStartupData = createServerFn({ method: "GET" })
   .handler(async () => {
-    await ensureDefaultUsers();
-    const sessionUser = await getAuthenticatedUser();
-    if (!sessionUser) return null;
-
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, sessionUser.userId))
-      .limit(1);
-
+    const user = await loadCurrentUser();
     if (!user) return null;
-
-    return {
-      userId: user.id,
-      username: user.username,
-      isAdmin: user.isAdmin,
-      displayName: user.displayName || user.username,
-      imageUrl: user.imageUrl || "",
-    };
+    const [items, events] = await Promise.all([
+      db.select().from(workItems).orderBy(desc(workItems.updatedAt)),
+      db.select().from(calendarEvents).orderBy(desc(calendarEvents.date)),
+    ]);
+    return { user, workItems: items, calendarEvents: events };
   });
 
 export const subscribeToNotifications = createServerFn({ method: "POST" })
@@ -613,8 +627,8 @@ export const markCustomerContacted = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.number() }))
   .handler(async ({ data }) => {
     if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
-    await db.update(workItems).set({ customerContacted: true, updatedAt: new Date() }).where(eq(workItems.id, data.id));
-    return { success: true };
+    const [updated] = await db.update(workItems).set({ customerContacted: true, updatedAt: new Date() }).where(eq(workItems.id, data.id)).returning();
+    return updated ?? null;
   });
 
 // One-tap stage change from the job card, without resending the whole form.
