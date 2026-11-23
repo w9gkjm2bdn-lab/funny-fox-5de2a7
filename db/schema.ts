@@ -25,7 +25,7 @@ export const workItems = pgTable("work_items", {
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone"),
   site: text("site").notNull(),
-  status: text("status").notNull().default("Pending"),
+  status: text("status").notNull().default("New enquiry"),
   notes: text("notes"),
   whatsRequired: text("whats_required").notNull(),
   whereNeedsMeasuring: text("where_needs_measuring").notNull(),

@@ -435,7 +435,7 @@ function TrackerApp() {
     setWhat3words((item as any).what3words || '')
     setStatus(item.status)
     setWhatsRequired(item.whatsRequired)
-    setWhereNeedsMeasuring(item.whereNeedsMeasuring)
+    setWhereNeedsMeasuring(item.whereNeedsMeasuring || '')
     setNotes(item.notes || '')
     setSamples((item as any).samples || '')
     setGoogleDriveUrl(item.googleDriveUrl || '')
@@ -471,7 +471,7 @@ function TrackerApp() {
     e.preventDefault()
     setFormError(null)
 
-    if (!customerName || !site || !whatsRequired || !whereNeedsMeasuring) {
+    if (!customerName || !site || !whatsRequired) {
       setFormError('Please fill in all required fields')
       return
     }
@@ -541,7 +541,7 @@ function TrackerApp() {
       setFormMode('none')
       await fetchWorkItems()
     } catch (err: any) {
-      setFormError(err?.message || 'Failed to save work item.')
+      setFormError(err?.message || 'Failed to save job.')
     } finally {
       setFormSubmitting(false)
     }
@@ -549,7 +549,7 @@ function TrackerApp() {
 
   // Handle delete work item
   const handleDeleteItem = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this work item?')) {
+    if (!confirm('Are you sure you want to delete this job?')) {
       return
     }
 
@@ -558,7 +558,7 @@ function TrackerApp() {
       await fetchWorkItems()
     } catch (err) {
       console.error('Delete error:', err)
-      alert('Failed to delete work item')
+      alert('Failed to delete job')
     }
   }
 
@@ -626,7 +626,7 @@ function TrackerApp() {
       (item.what3words && item.what3words.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (item.googleDriveUrl && item.googleDriveUrl.toLowerCase().includes(searchQuery.toLowerCase())) ||
       item.whatsRequired.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.whereNeedsMeasuring.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.whereNeedsMeasuring || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
 
     // Status filter only applies to the active list (the archive is all "Completed").
@@ -863,10 +863,10 @@ function TrackerApp() {
                   className="appearance-none w-full sm:w-44 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="All">All Statuses</option>
-                  <option value="Pending">Pending</option>
+                  <option value="New enquiry">New enquiry</option>
                   <option value="Measure booked">Measure booked</option>
-                  <option value="Fitting booked">Fitting booked</option>
                   <option value="Quote sent">Quote sent</option>
+                  <option value="Fitting booked">Fitting booked</option>
                   <option value="In progress">In progress</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-500">
@@ -1006,7 +1006,7 @@ function TrackerApp() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clipboard className="w-5 h-5 text-emerald-400" />
                 <span id="work-item-form-title">
-                  {formMode === 'add' ? 'Add New Work Item' : 'Edit Work Item'}
+                  {formMode === 'add' ? 'Add New Job' : 'Edit Job'}
                 </span>
               </h3>
               <button
@@ -1097,10 +1097,10 @@ function TrackerApp() {
                     onChange={(e) => setStatus(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm cursor-pointer"
                   >
-                    <option value="Pending">Pending</option>
+                    <option value="New enquiry">New enquiry</option>
                     <option value="Measure booked">Measure booked</option>
-                    <option value="Fitting booked">Fitting booked</option>
                     <option value="Quote sent">Quote sent</option>
+                    <option value="Fitting booked">Fitting booked</option>
                     <option value="In progress">In progress</option>
                     <option value="Completed">Completed</option>
                   </select>
@@ -1108,13 +1108,12 @@ function TrackerApp() {
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-300 mb-1.5">
-                    Where Needs Measuring <span className="text-red-500">*</span>
+                    Where needs measuring <span className="text-slate-500 font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={whereNeedsMeasuring}
                     onChange={(e) => setWhereNeedsMeasuring(e.target.value)}
-                    required
                     className="w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                     placeholder="E.g. Ground floor windows, boardroom skylight"
                   />
@@ -1488,7 +1487,7 @@ function TrackerApp() {
           <div className="bg-slate-900/20 py-20 text-center rounded-3xl border border-dashed border-slate-800">
             <Clipboard className="w-12 h-12 text-slate-600 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-300">
-              {view === 'archive' ? 'No Archived Jobs Yet' : 'No Work Items Found'}
+              {view === 'archive' ? 'No Archived Jobs Yet' : 'No Jobs Found'}
             </h3>
             <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
               {view === 'archive'
@@ -1515,7 +1514,7 @@ function TrackerApp() {
                 statusBadgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
               } else if (item.status === 'Quote sent') {
                 statusBadgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              } else if (item.status === 'Pending') {
+              } else if (item.status === 'New enquiry' || item.status === 'Pending') {
                 statusBadgeClass = 'bg-slate-500/10 text-slate-300 border border-slate-500/20'
               } else {
                 statusBadgeClass = 'bg-slate-700/10 text-slate-300 border border-slate-700/20'
@@ -1640,12 +1639,14 @@ function TrackerApp() {
                         </p>
                       </div>
 
-                      <div>
-                        <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wider">Where Needs Measuring</p>
-                        <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
-                          {item.whereNeedsMeasuring}
-                        </p>
-                      </div>
+                      {item.whereNeedsMeasuring && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wider">Where Needs Measuring</p>
+                          <p className="text-sm text-slate-300 leading-relaxed font-medium mt-1">
+                            {item.whereNeedsMeasuring}
+                          </p>
+                        </div>
+                      )}
 
                       {item.notes && (
                         <div>
@@ -1710,7 +1711,7 @@ function TrackerApp() {
                             title={`📏 Measure: ${item.customerName}`}
                             dateStr={item.measuredBooked}
                             location={item.site}
-                            details={`Where needs measuring: ${item.whereNeedsMeasuring}\nWhat's required: ${item.whatsRequired}${item.notes ? `\nNotes: ${item.notes}` : ''}${item.what3words ? `\nwhat3words: ${item.what3words}` : ''}`}
+                            details={`${item.whereNeedsMeasuring ? `Where needs measuring: ${item.whereNeedsMeasuring}\n` : ''}What's required: ${item.whatsRequired}${item.notes ? `\nNotes: ${item.notes}` : ''}${item.what3words ? `\nwhat3words: ${item.what3words}` : ''}`}
                             compact={true}
                           />
                         </div>

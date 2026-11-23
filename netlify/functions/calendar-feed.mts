@@ -36,7 +36,7 @@ export default async (req: Request) => {
           events.push({
             uid: `job-measure-${job.id}-${parsed.dateStr}@worktracker`,
             title: `📏 Measure: ${job.customerName}`,
-            description: `Where: ${job.whereNeedsMeasuring}\nRequired: ${job.whatsRequired}${timeInfo}${job.notes ? `\nNotes: ${job.notes}` : ''}${job.what3words ? `\nwhat3words: ${job.what3words}` : ''}${job.customerPhone ? `\nPhone: ${job.customerPhone}` : ''}`,
+            description: `${job.whereNeedsMeasuring ? `Where: ${job.whereNeedsMeasuring}\n` : ''}Required: ${job.whatsRequired}${timeInfo}${job.notes ? `\nNotes: ${job.notes}` : ''}${job.what3words ? `\nwhat3words: ${job.what3words}` : ''}${job.customerPhone ? `\nPhone: ${job.customerPhone}` : ''}`,
             location: job.site || '',
             dateStr: rawDate,
             durationHours: 1,
