@@ -79,6 +79,15 @@ async function ensureDefaultUsers() {
   }
 }
 
+// "Tom" for notifications: the profile display name, or the capitalised username.
+async function actorName(user: { userId: number; username: string }) {
+  try {
+    const [row] = await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, user.userId)).limit(1);
+    if (row?.displayName?.trim()) return row.displayName.trim();
+  } catch { /* fall back to username */ }
+  return user.username.charAt(0).toUpperCase() + user.username.slice(1);
+}
+
 async function getAuthenticatedUser() {
   const sessionToken = getCookie("work_tracker_session");
   if (!sessionToken) return null;
@@ -259,7 +268,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
     samples: z.string().optional(),
     googleDriveUrl: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
-    whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    whereNeedsMeasuring: z.string().optional(),
     assignedTo: z.enum(["tom", "chris"]),
     measuredBy: z.string().optional(),
     carpetAndFlooringOrdered: z.boolean().optional(),
@@ -291,7 +300,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
         assignedTo: data.assignedTo,
         measuredBy: (data as any).measuredBy || "",
         whatsRequired: data.whatsRequired,
-        whereNeedsMeasuring: data.whereNeedsMeasuring,
+        whereNeedsMeasuring: data.whereNeedsMeasuring || "",
         carpetAndFlooringOrdered: data.carpetAndFlooringOrdered || false,
         upliftAndDisposal: data.upliftAndDisposal || false,
         furniture: data.furniture || false,
@@ -304,7 +313,7 @@ export const createWorkItem = createServerFn({ method: "POST" })
       })
       .returning();
 
-    await notifyAllSubscribers("Work item added", `${data.customerName} has been added to the tracker.`);
+    await notifyAllSubscribers("Job added", `${await actorName(user)} added ${data.customerName}.`, user.userId);
 
     return newItem;
   });
@@ -320,7 +329,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
     samples: z.string().optional(),
     googleDriveUrl: z.string().optional(),
     whatsRequired: z.string().min(1, "What is required is mandatory"),
-    whereNeedsMeasuring: z.string().min(1, "Where needs measuring is mandatory"),
+    whereNeedsMeasuring: z.string().optional(),
     assignedTo: z.enum(["tom", "chris"]),
     carpetAndFlooringOrdered: z.boolean().optional(),
     upliftAndDisposal: z.boolean().optional(),
@@ -353,6 +362,7 @@ export const updateWorkItem = createServerFn({ method: "POST" })
       .set({
         ...values,
         customerContacted,
+        whereNeedsMeasuring: values.whereNeedsMeasuring || "",
         customerPhone: (values as any).customerPhone || "",
         notes: values.notes || "",
         samples: (values as any).samples || "",
@@ -369,10 +379,10 @@ export const updateWorkItem = createServerFn({ method: "POST" })
       .returning();
 
     if (!updatedItem) {
-      throw new Error("Work item not found");
+      throw new Error("Job not found");
     }
 
-    await notifyAllSubscribers("Work item updated", `${data.customerName} has been changed.`);
+    await notifyAllSubscribers("Job updated", `${await actorName(user)} updated ${data.customerName}.`, user.userId);
 
     return updatedItem;
   });
@@ -398,7 +408,7 @@ export const deleteWorkItem = createServerFn({ method: "POST" })
       .where(eq(workItems.id, data.id));
 
     if (itemToDelete) {
-      await notifyAllSubscribers("Work item removed", `${itemToDelete.customerName} was removed from the tracker.`);
+      await notifyAllSubscribers("Job removed", `${await actorName(user)} removed ${itemToDelete.customerName}.`, user.userId);
     }
 
     return { success: true };
@@ -444,7 +454,7 @@ export const createCalendarEvent = createServerFn({ method: "POST" })
       })
       .returning();
 
-    await notifyAllSubscribers("Calendar update", `${data.title} has been added to the schedule.`);
+    await notifyAllSubscribers("Calendar update", `${await actorName(user)} added ${data.title} to the calendar.`, user.userId);
 
     return newEvent;
   });
@@ -484,7 +494,7 @@ export const updateCalendarEvent = createServerFn({ method: "POST" })
       throw new Error("Calendar event not found");
     }
 
-    await notifyAllSubscribers("Calendar update", `${data.title} was updated.`);
+    await notifyAllSubscribers("Calendar update", `${await actorName(user)} updated ${data.title}.`, user.userId);
 
     return updatedEvent;
   });
@@ -510,7 +520,7 @@ export const deleteCalendarEvent = createServerFn({ method: "POST" })
       .where(eq(calendarEvents.id, data.id));
 
     if (eventToDelete) {
-      await notifyAllSubscribers("Calendar update", `${eventToDelete.title} was removed from the schedule.`);
+      await notifyAllSubscribers("Calendar update", `${await actorName(user)} removed ${eventToDelete.title} from the calendar.`, user.userId);
     }
 
     return { success: true };
@@ -559,10 +569,11 @@ export const markCustomerContacted = createServerFn({ method: "POST" })
 export const setWorkItemStatus = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.number(), status: z.enum(JOB_STAGES) }))
   .handler(async ({ data }) => {
-    if (!await getAuthenticatedUser()) throw new Error("Unauthorized");
+    const user = await getAuthenticatedUser();
+    if (!user) throw new Error("Unauthorized");
     const [updated] = await db.update(workItems).set({ status: data.status, updatedAt: new Date() })
       .where(eq(workItems.id, data.id)).returning();
-    if (!updated) throw new Error("Work item not found");
-    await notifyAllSubscribers("Work item updated", `${updated.customerName} moved to ${data.status}.`);
+    if (!updated) throw new Error("Job not found");
+    await notifyAllSubscribers("Job updated", `${await actorName(user)} moved ${updated.customerName} to ${data.status}.`, user.userId);
     return updated;
   });

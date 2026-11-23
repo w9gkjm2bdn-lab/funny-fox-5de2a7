@@ -38,9 +38,11 @@ export async function sendPush(subscription: typeof notificationSubscriptions.$i
 }
 
 // Delivery failure must not turn a saved job into an apparent failed save.
-export async function notifyAllSubscribers(title: string, body: string) {
+// The person who made the change doesn't need telling about it.
+export async function notifyAllSubscribers(title: string, body: string, excludeUserId?: number) {
   try {
-    const subscriptions = await db.select().from(notificationSubscriptions)
+    const subscriptions = (await db.select().from(notificationSubscriptions))
+      .filter(subscription => subscription.userId !== excludeUserId)
     await Promise.all(subscriptions.map(subscription => sendPush(subscription, title, body, `change-${Date.now()}`)))
   } catch {
     console.warn('Unable to deliver tracker change notifications')
