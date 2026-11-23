@@ -54,6 +54,7 @@ import { parseDateTimeString, formatDateTimeDisplay } from '../utils/ics'
 import { nextStage, stageStyle } from '../utils/job-stages'
 import { nextAppointment, formatAppointmentDate } from '../utils/next-appointment'
 import { nextFittingDate, fittingMessage, whatsappHref, smsHref } from '../utils/customer-message'
+import { sortByNextAppointment, jobMatchesSearch } from '../utils/job-list'
 
 export const Route = createFileRoute('/')({
   component: TrackerApp,
@@ -664,22 +665,11 @@ function TrackerApp() {
   const archivedItems = workItemsList.filter((item) => item.status === 'Completed')
 
   // Filtering Logic
-  const filteredItems = (view === 'archive' ? archivedItems : activeItems).filter((item) => {
-    const matchesSearch =
-      item.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.customerPhone && item.customerPhone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      item.site.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.what3words && item.what3words.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.googleDriveUrl && item.googleDriveUrl.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      item.whatsRequired.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.whereNeedsMeasuring || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.notes && item.notes.toLowerCase().includes(searchQuery.toLowerCase()))
-
+  const filteredItems = (view === 'archive' ? archivedItems : sortByNextAppointment(activeItems, localToday())).filter((item) => {
     // Status filter only applies to the active list (the archive is all "Completed").
     const matchesStatus =
       view === 'archive' || statusFilter === 'All' || item.status === statusFilter
-
-    return matchesSearch && matchesStatus
+    return matchesStatus && jobMatchesSearch(item, searchQuery)
   })
 
   // Counts for Stats
@@ -729,6 +719,12 @@ function TrackerApp() {
                   </div>
                   <input
                     type="text"
+                    name="username"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="next"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
                     required
@@ -748,6 +744,9 @@ function TrackerApp() {
                   </div>
                   <input
                     type="password"
+                    name="password"
+                    autoComplete="current-password"
+                    enterKeyHint="go"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
                     required
@@ -901,12 +900,23 @@ function TrackerApp() {
                 <Search className="w-4 h-4" />
               </div>
               <input
-                type="text"
-                placeholder="Search by customer, site, needs..."
+                type="search"
+                enterKeyHint="search"
+                placeholder="Search name, address, phone, notes…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm transition-all"
+                className="w-full pl-10 pr-10 py-2 [&::-webkit-search-cancel-button]:hidden bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-sm transition-all"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-white cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Status Select Filter */}
@@ -1047,7 +1057,7 @@ function TrackerApp() {
         {/* Dynamic Modal for Add & Edit */}
         {formMode !== 'none' && (
           <div
-            className="fixed inset-x-0 top-0 h-lvh z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto overscroll-contain px-3 pt-4 pb-24 sm:px-6 sm:py-8"
+            className="fixed inset-x-0 top-0 h-lvh z-50 bg-slate-950/80 backdrop-blur-sm overflow-y-auto overscroll-contain px-3 sm:px-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="work-item-form-title"
@@ -1057,7 +1067,7 @@ function TrackerApp() {
               }
             }}
           >
-            <div className="w-full max-w-5xl mx-auto bg-slate-900 rounded-2xl border border-emerald-500/20 overflow-hidden shadow-2xl shadow-slate-950/60">
+            <div className="w-full max-w-5xl mx-auto mt-4 mb-24 sm:mt-8 sm:mb-8 bg-slate-900 rounded-2xl border border-emerald-500/20 overflow-clip shadow-2xl shadow-slate-950/60">
             <div className="sticky top-0 z-10 px-4 py-3 sm:px-6 sm:py-4 bg-slate-900/95 backdrop-blur border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clipboard className="w-5 h-5 text-emerald-400" />
@@ -1437,30 +1447,32 @@ function TrackerApp() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="sticky bottom-[calc(100lvh-100dvh)] z-10 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-end gap-2 sm:gap-3 bg-slate-900/95 backdrop-blur border-t border-slate-800">
                 {formMode === 'edit' && selectedItemId !== null && (
                   <button
                     type="button"
                     onClick={async () => {
                       if (await handleDeleteItem(selectedItemId)) setFormMode('none')
                     }}
-                    className="mr-auto inline-flex items-center gap-1.5 px-4 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                    className="mr-auto inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                    aria-label="Delete job"
+                    title="Delete job"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Delete job
+                    <span className="hidden sm:inline">Delete job</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setFormMode('none')}
-                  className="px-5 py-2.5 bg-slate-950 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
+                  className="px-4 sm:px-5 py-2.5 bg-slate-950 border border-slate-800 text-slate-300 hover:text-white rounded-xl text-sm font-semibold transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/10"
+                  className="flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 whitespace-nowrap bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/10"
                 >
                   {formSubmitting ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
