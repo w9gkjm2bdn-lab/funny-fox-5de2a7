@@ -61,4 +61,7 @@ export default async () => {
   await db.delete(notificationDeliveries).where(lt(notificationDeliveries.claimedAt, new Date(now.getTime() - 90 * 86400000)))
 }
 
-export const config = { schedule: '*/10 * * * *' }
+// Only wake up in the hours a reminder can go out: 7 am and 6 pm UK time are
+// 06:xx/07:xx and 17:xx/18:xx UTC across summer and winter. Running all day cost
+// credits for nothing. Netlify reads this value as written, so keep it a literal.
+export const config = { schedule: '*/10 6,7,17,18 * * *' }
